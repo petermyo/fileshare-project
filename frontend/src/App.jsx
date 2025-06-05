@@ -276,7 +276,7 @@ function App() {
 
             {/* Upload Progress Bar */}
             {isUploading && (
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4 mb-4"> {/* Added mb-4 here */}
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4 mb-4">
                 <div
                   className="bg-blue-600 h-2.5 rounded-full"
                   style={{ width: `${uploadProgress}%` }}
@@ -352,7 +352,7 @@ function App() {
                 <tbody className="divide-y divide-gray-200">
                   {uploadedFiles.map((file, index) => (
                     <tr key={index} className="hover:bg-gray-50">
-                      <td className="py-3 px-4 text-sm text-gray-800">{file.fileName}</td>
+                      <td className="py-3 px-4 text-sm text-gray-800 truncate overflow-hidden whitespace-nowrap max-w-xs">{file.fileName}</td> {/* Added truncation classes */}
                       <td className="py-3 px-4 text-sm">
                         <a 
                           href={file.downloadUrl} 
