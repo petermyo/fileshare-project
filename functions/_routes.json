@@ -1,11 +1,10 @@
 {
   "version": 1,
-  "description": "Explicitly routes /api and /f paths to Pages Function; all other paths (including /) fall through to static assets.",
+  "description": "Routes only /api paths to Pages Function; all other paths default to static assets.",
   "include": [
     "/*"
   ],
   "exclude": [
-    "/api/*",
-    "/f/*"
+    "/api/*"
   ]
 }
