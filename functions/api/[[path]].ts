@@ -24,6 +24,11 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Set the base path for Hono. This is crucial for Pages Functions
+// because the [[path]].ts catches requests at /api/*, so Hono expects /api/
+app.basePath('/api');
+
+
 // Add CORS middleware to allow frontend (even on different local host/port) to access API
 // In a production setup where frontend and backend are on the same Pages domain, this might not be strictly necessary,
 // but it's good practice for development and potential cross-subdomain scenarios.
@@ -69,7 +74,7 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-// This route will effectively be /api/upload due to the functions/api/[[path]].ts structure
+// This route will now match /api/upload due to app.basePath('/api')
 app.post('/upload', async (c) => {
   console.log('[/api/upload POST] Route hit!');
   console.log('Request URL:', c.req.url); // Log the full URL Hono sees
@@ -142,7 +147,7 @@ app.post('/upload', async (c) => {
 });
 
 // --- API Endpoint for File Download/Retrieval ---
-// This route will effectively be /api/download/:slug due to the functions/api/[[path]].ts structure
+// This route will now match /api/download/:slug due to app.basePath('/api')
 app.get('/download/:slug', async (c) => {
   console.log('[/api/download/:slug GET] Route hit!');
   console.log('Request URL:', c.req.url);
