@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 // API_UPLOAD_PATH remains /api/upload
 const API_UPLOAD_PATH = '/api/upload';
 // DOWNLOAD_BASE_PATH is now /f
-const DOWNLOAD_BASE_PATH = '/api/d';
+const DOWNLOAD_BASE_PATH = '/s';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
