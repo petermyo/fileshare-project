@@ -22,8 +22,8 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Re-add CORS middleware
 // Apply CORS middleware to all routes handled by this function.
+// Since [[path]].ts is at the root of 'functions', it catches all non-static requests.
 app.use('*', cors({
   origin: '*', // IMPORTANT: Adjust to your frontend's actual domain(s) in production (e.g., 'https://fileshare-project.pages.dev')
   allowHeaders: ['Content-Type', 'Authorization'],
@@ -32,7 +32,7 @@ app.use('*', cors({
   credentials: true,
 }));
 
-// Re-add middleware for logging request details
+// Middleware for logging request details (useful for debugging)
 app.use('*', async (c, next) => {
   console.log(`[Middleware] Processing ${c.req.method} request to: ${c.req.url}`);
   console.log(`[Middleware] Path: ${c.req.path}`); // This will be the full path Hono sees (e.g., /api/upload or /f/xyz or /)
@@ -123,7 +123,7 @@ app.post('/api/upload', async (c) => {
       file.name,
       file.type,
       file.size,
-      Date.Date.now(), // Fixed: Use Date.now()
+      Date.now(), // Corrected: ensure this is Date.now()
       expiryTimestamp,
       passcodeHash,
       isPrivate ? 1 : 0
