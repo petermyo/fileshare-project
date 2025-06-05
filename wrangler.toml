@@ -12,3 +12,8 @@ bucket_name = 'filesharing' # IMPORTANT: Replace with your actual R2 bucket name
 binding = 'DB' # This will be accessible as env.DB in your Pages Functions
 database_name = 'filesharing' # IMPORTANT: Replace with your actual D1 database name
 database_id = 'ff893b0c-e959-43ca-9604-834691f746f3' # IMPORTANT: Replace with your actual D1 database ID
+
+[[d1_databases]]
+binding = 'USER_DB' # NEW: This binding is for your user authentication database
+database_name = 'myo-user-db' # IMPORTANT: Ensure this matches the name in your Cloudflare D1 dashboard
+database_id = '0ffe7358-64bb-4a90-90ef-4fa3be4a4b6b' # IMPORTANT: Replace with your actual user_db D1 database ID
