@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 
-// API_UPLOAD_PATH remains /api/upload as per your current backend (only download path changed)
+// API_UPLOAD_PATH remains /api/upload
 const API_UPLOAD_PATH = '/api/upload';
-// New path for downloads
+// DOWNLOAD_BASE_PATH is now /f
 const DOWNLOAD_BASE_PATH = '/f';
 
 function App() {
@@ -40,7 +40,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(API_UPLOAD_PATH, { // Upload path remains /api/upload
+      const response = await fetch(API_UPLOAD_PATH, {
         method: 'POST',
         body: formData,
       });
