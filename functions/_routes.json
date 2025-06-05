@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "Routes only /api paths to Pages Function; all other paths default to static assets.",
+  "include": [
+    "/*"
+  ],
+  "exclude": [
+    "/api/*"
+  ]
+}
