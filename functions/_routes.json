@@ -2,6 +2,7 @@
   "version": 1,
   "description": "Routes explicitly /api/* paths to Pages Function. All other paths (including /) are served as static assets by default.",
   "include": [
-    "/api/*"
+    "/api/*",
+    "/s/*"
   ]
 }
