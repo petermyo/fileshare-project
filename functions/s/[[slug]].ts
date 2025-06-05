@@ -1,6 +1,5 @@
-// functions/s/[[slug]].ts (Direct Download Function)
+// functions/s/[[slug]].ts (Short URL Direct Download / UI Redirect Function)
 // This file should be directly inside the 'functions/s' directory.
-// It handles requests for /s/SLUG and directly serves the file.
 
 import { Hono } from 'hono';
 
@@ -30,13 +29,13 @@ async function hashPasscode(passcode: string): Promise<string> {
   return hexHash;
 }
 
-// This route catches requests like /s/SLUG and directly serves the file
+// This route catches requests like /s/SLUG
 app.get('/s/:slug', async (c) => {
   console.log(`[Direct Download /s/:slug] Request received for /s/${c.req.param('slug')}`);
   const slug = c.req.param('slug');
   const providedPasscode = c.req.query('passcode'); // Capture passcode if provided in URL
 
-  console.log(`[Download Debug /s/] Slug: ${slug}, Provided Passcode in URL: ${providedPasscode ? 'YES' : 'NO'}`);
+  console.log(`[Download Logic /s/] Slug: ${slug}, Provided Passcode in URL: ${providedPasscode ? 'YES' : 'NO'}`);
 
   try {
     // 1. Retrieve file metadata from D1
@@ -45,49 +44,58 @@ app.get('/s/:slug', async (c) => {
     ).bind(slug).all();
 
     if (!results || results.length === 0) {
-      console.log('[Download Debug /s/] File metadata not found in D1.');
-      return c.json({ success: false, error: 'File not found.' }, 404);
+      console.log('[Download Logic /s/] File metadata not found in D1.');
+      // Redirect to frontend with an error message
+      const errorMessage = encodeURIComponent('File not found or has been removed.');
+      return c.redirect(`/?error=${errorMessage}`, 302);
     }
 
     const fileMetadata = results[0] as any;
-    console.log(`[Download Debug /s/] File Metadata from D1: is_private=${fileMetadata.is_private}, stored_passcode_hash=${fileMetadata.passcode_hash}`);
+    console.log(`[Download Logic /s/] File Metadata from D1: is_private=${fileMetadata.is_private}, stored_passcode_hash=${fileMetadata.passcode_hash}`);
 
     // 2. Check for expiry
     if (fileMetadata.expiry_timestamp && Date.now() > fileMetadata.expiry_timestamp) {
-      console.log('[Download Debug /s/] File expired.');
-      return c.json({ success: false, error: 'This file has expired and is no longer available.' }, 410);
+      console.log('[Download Logic /s/] File expired.');
+      const errorMessage = encodeURIComponent('This file has expired and is no longer available.');
+      return c.redirect(`/?error=${errorMessage}`, 302);
     }
 
     // 3. Check for privacy and passcode
     if (fileMetadata.is_private === 1) { // D1 boolean is 1 for true
-      console.log('[Download Debug /s/] File is marked as private (is_private=1).');
+      console.log('[Download Logic /s/] File is marked as private (is_private=1).');
       if (!providedPasscode) {
-        console.log('[Download Debug /s/] Private file, but NO passcode was provided in the URL.');
-        return c.json({ success: false, error: 'This file is private and requires a passcode. Please provide it as a query parameter (e.g., ?passcode=YOUR_PASSCODE).' }, 401);
+        console.log('[Download Logic /s/] Private file, but NO passcode was provided in the URL. Redirecting to UI.');
+        // Redirect to frontend with prompt for passcode
+        const promptMessage = encodeURIComponent('This file is private. Please enter the passcode to download.');
+        return c.redirect(`/?slug=${slug}&promptDownload=true&message=${promptMessage}`, 302);
       }
+
       const providedPasscodeHash = await hashPasscode(providedPasscode);
-      console.log(`[Download Debug /s/] Provided Passcode (hashed): ${providedPasscodeHash}`);
-      console.log(`[Download Debug /s/] Stored Passcode (hashed): ${fileMetadata.passcode_hash}`);
+      console.log(`[Download Logic /s/] Provided Passcode (hashed): ${providedPasscodeHash}`);
+      console.log(`[Download Logic /s/] Stored Passcode (hashed): ${fileMetadata.passcode_hash}`);
 
       if (providedPasscodeHash !== fileMetadata.passcode_hash) {
-        console.log('[Download Debug /s/] Passcode MISMATCH. Invalid passcode provided.');
-        return c.json({ success: false, error: 'Invalid passcode provided.' }, 403);
+        console.log('[Download Logic /s/] Passcode MISMATCH. Redirecting to UI with error.');
+        const errorMessage = encodeURIComponent('Invalid passcode provided.');
+        return c.redirect(`/?slug=${slug}&promptDownload=true&message=${errorMessage}`, 302);
       }
-      console.log('[Download Debug /s/] Passcode matched. Access granted.');
+      console.log('[Download Logic /s/] Passcode matched. Access granted.');
     } else {
-      console.log('[Download Debug /s/] File is NOT private (is_private=0). No passcode check needed.');
+      console.log('[Download Logic /s/] File is NOT private (is_private=0). No passcode check needed.');
     }
 
+    // If we reach here, it's either public or private with correct passcode. Proceed with R2 download.
     // 4. Retrieve the file from R2
     const r2ObjectKey = `files/${fileMetadata.id}-${fileMetadata.original_filename}`;
-    console.log(`[Download Debug /s/] Attempting to retrieve from R2 with key: ${r2ObjectKey}`);
+    console.log(`[Download Logic /s/] Attempting to retrieve from R2 with key: ${r2ObjectKey}`);
     const object = await c.env.FILES_BUCKET.get(r2ObjectKey);
 
     if (!object) {
-      console.log('[Download Debug /s/] File content not found in R2 for given key.');
-      return c.json({ success: false, error: 'File content not found in storage.' }, 404);
+      console.log('[Download Logic /s/] File content not found in R2 for given key.');
+      const errorMessage = encodeURIComponent('File content not found in storage.');
+      return c.redirect(`/?error=${errorMessage}`, 302);
     }
-    console.log('[Download Debug /s/] File object retrieved from R2. Streaming content...');
+    console.log('[Download Logic /s/] File object retrieved from R2. Streaming content...');
 
     // 5. Set appropriate headers for file download
     c.header('Content-Type', fileMetadata.mime_type || 'application/octet-stream');
@@ -96,8 +104,9 @@ app.get('/s/:slug', async (c) => {
 
     return c.body(object.body); // Stream the file content
   } catch (error) {
-    console.error('[Download Debug /s/] Error in /s/:slug handler:', error);
-    return c.json({ success: false, error: 'An unexpected error occurred during download.' }, 500);
+    console.error('[Download Logic /s/] Error in /s/:slug handler:', error);
+    const errorMessage = encodeURIComponent('An unexpected error occurred during download.');
+    return c.redirect(`/?error=${errorMessage}`, 302);
   }
 });
 
@@ -107,9 +116,9 @@ app.all('*', (c) => {
     console.log('Fallback Request URL:', c.req.url);
     console.log('Fallback Request Path (Hono):', c.req.path);
     console.log('Fallback Request Method:', c.req.method);
-    return c.notFound();
+    const errorMessage = encodeURIComponent('Short URL not recognized.');
+    return c.redirect(`/?error=${errorMessage}`, 302);
 });
-
 
 // Pages Function entry point for this short URL direct download
 export const onRequest = async (context: PagesFunctionContext<Env>) => {
