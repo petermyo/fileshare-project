@@ -40,6 +40,16 @@ app.use('/api/*', cors({ // Apply CORS to all routes under /api
   credentials: true,
 }));
 
+// NEW: Add a middleware to log the path after basePath is applied and before specific routes
+app.use('*', async (c, next) => {
+  console.log('[Middleware] Hono processing request.');
+  console.log('[Middleware] Request Method:', c.req.method);
+  console.log('[Middleware] Request Path (c.req.path):', c.req.path); // This path should be relative to basePath now (e.g., /upload)
+  console.log('[Middleware] Request URL (c.req.url):', c.req.url);   // This is the full URL
+  await next();
+});
+
+
 // Helper function to hash a string using SHA-256 (for passcodes)
 async function hashPasscode(passcode: string): Promise<string> {
   const textEncoder = new TextEncoder();
@@ -76,10 +86,7 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 // --- API Endpoint for File Upload ---
 // This route will now match /api/upload due to app.basePath('/api')
 app.post('/upload', async (c) => {
-  console.log('[/api/upload POST] Route hit!');
-  console.log('Request URL:', c.req.url); // Log the full URL Hono sees
-  console.log('Request Path:', c.req.path); // Log the path relative to Hono's base
-  console.log('Request Method:', c.req.method); // Log the request method
+  console.log('[/api/upload POST] Route hit!'); // This log should appear if matched
   try {
     const formData = await c.req.formData();
     const file = formData.get('file');
@@ -149,10 +156,7 @@ app.post('/upload', async (c) => {
 // --- API Endpoint for File Download/Retrieval ---
 // This route will now match /api/download/:slug due to app.basePath('/api')
 app.get('/download/:slug', async (c) => {
-  console.log('[/api/download/:slug GET] Route hit!');
-  console.log('Request URL:', c.req.url);
-  console.log('Request Path:', c.req.path);
-  console.log('Request Method:', c.req.method);
+  console.log('[/api/download/:slug GET] Route hit!'); // This log should appear if matched
   const slug = c.req.param('slug');
   const providedPasscode = c.req.query('passcode');
 
