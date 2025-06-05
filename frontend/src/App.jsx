@@ -19,78 +19,35 @@ function App() {
 
   const passcodeRef = useRef(null); // Ref to focus the passcode input
 
-  // Effect to handle URL-based downloads (e.g., /s/SLUG or /s/SLUG?passcode=X)
+  // Effect to handle URL-based redirects from /s/SLUG
   useEffect(() => {
-    const path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
-    const slugMatch = path.match(/^\/s\/([a-zA-Z0-9]+)$/);
+    const slugFromUrl = searchParams.get('slug');
+    const promptDownloadFromUrl = searchParams.get('promptDownload') === 'true';
+    const messageFromUrl = searchParams.get('message');
+    const errorFromUrl = searchParams.get('error');
 
-    if (slugMatch) {
-      const slugFromUrl = slugMatch[1];
-      const passcodeFromUrl = searchParams.get('passcode');
-
-      setDownloadSlug(slugFromUrl);
-      setDownloadPasscode(passcodeFromUrl || ''); // Pre-fill if present in URL
-
-      // Attempt to download directly if passcode is in URL, otherwise show prompt
-      const initiateAutoDownload = async () => {
-        try {
-          const urlToFetch = `${window.location.origin}/s/${slugFromUrl}${passcodeFromUrl ? `?passcode=${passcodeFromUrl}` : ''}`;
-          const response = await fetch(urlToFetch);
-
-          if (response.ok) {
-            // If download successful, trigger browser download
-            const blob = await response.blob();
-            const contentDisposition = response.headers.get('Content-Disposition');
-            let filename = 'downloaded-file';
-            if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
-                filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
-            } else {
-                const mimeType = response.headers.get('Content-Type');
-                if (mimeType) {
-                    const parts = mimeType.split('/');
-                    if (parts.length > 1) {
-                        filename = `${slugFromUrl}.${parts[1]}`;
-                    }
-                }
-            }
-
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-            setDownloadResult('File download initiated successfully.');
-            setShowDownloadPrompt(false); // Hide prompt if successful
-            // Clear URL params after successful download to prevent re-download on refresh
-            window.history.replaceState({}, document.title, window.location.pathname);
-
-          } else if (response.status === 401 || response.status === 403) {
-            // Passcode required or invalid, show download prompt
-            setShowDownloadPrompt(true);
-            setPromptMessage('This file is private. Please enter the passcode to download.');
-            setDownloadPasscode(''); // Clear old passcode
-            if (passcodeRef.current) {
-              passcodeRef.current.focus(); // Focus on passcode input
-            }
-          } else {
-            const errorData = await response.json();
-            setErrorMessage(errorData.error || `Download failed: HTTP ${response.status}`);
-            setShowDownloadPrompt(true); // Keep prompt open to show error
-          }
-        } catch (error) {
-          console.error('Auto download error:', error);
-          setErrorMessage('An unexpected error occurred during automatic download.');
-          setShowDownloadPrompt(true); // Keep prompt open to show error
-        }
-      };
-
-      initiateAutoDownload();
+    if (errorFromUrl) {
+      setErrorMessage(decodeURIComponent(errorFromUrl));
+      // Clear error from URL to prevent infinite loop on refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [window.location.pathname]);
+
+    if (slugFromUrl && promptDownloadFromUrl) {
+      setDownloadSlug(slugFromUrl);
+      setPromptMessage(decodeURIComponent(messageFromUrl || ''));
+      setShowDownloadPrompt(true); // Force show download prompt
+      // Clear URL parameters after initial processing
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []); // Run only once on component mount
+
+  // Effect to focus passcode input when download prompt shows
+  useEffect(() => {
+    if (showDownloadPrompt && passcodeRef.current) {
+      passcodeRef.current.focus();
+    }
+  }, [showDownloadPrompt]);
 
 
   const handleFileChange = (event) => {
@@ -132,7 +89,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`/api/upload`, {
+      const response = await fetch(`${API_BASE_PATH}/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -141,12 +98,12 @@ function App() {
 
       if (response.ok && data.success) {
         setUploadResult({
-          shortUrl: `${window.location.origin}/s/${data.shortUrlSlug}`,
+          shortUrl: `${window.location.origin}/s/${data.shortUrlSlug}`, // Short URL for display
           originalFilename: data.originalFilename,
           isPrivate: data.isPrivate,
           expiryTimestamp: data.expiryTimestamp,
         });
-        setDownloadSlug(data.shortUrlSlug);
+        setDownloadSlug(data.shortUrlSlug); // Pre-fill for easy testing
       } else {
         setErrorMessage(data.error || 'Upload failed. Please check the console for details.');
       }
@@ -164,58 +121,19 @@ function App() {
       return;
     }
 
+    // For manual download from the UI, directly call the /s/ route
     let downloadUrl = `${window.location.origin}/s/${downloadSlug}`;
     if (downloadPasscode) {
       downloadUrl += `?passcode=${downloadPasscode}`;
     }
 
-    try {
-      const response = await fetch(downloadUrl);
+    // Direct navigation to trigger download (or redirect from server)
+    window.location.href = downloadUrl;
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = 'downloaded-file';
-        if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
-            filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
-        } else {
-            const mimeType = response.headers.get('Content-Type');
-            if (mimeType) {
-                const parts = mimeType.split('/');
-                if (parts.length > 1) {
-                    filename = `${downloadSlug}.${parts[1]}`;
-                }
-            }
-        }
-
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        setDownloadResult('File download initiated successfully.');
-        setShowDownloadPrompt(false); // Hide prompt if successful manual download
-        setDownloadPasscode(''); // Clear passcode
-      } else if (response.status === 401 || response.status === 403) {
-        const errorData = await response.json();
-        setErrorMessage(errorData.error || 'Passcode required or invalid.');
-        setPromptMessage(errorData.error || 'Please enter the correct passcode.');
-        setShowDownloadPrompt(true); // Ensure download prompt is visible
-        setDownloadPasscode(''); // Clear old passcode
-        if (passcodeRef.current) {
-          passcodeRef.current.focus(); // Focus on passcode input
-        }
-      } else {
-        const errorData = await response.json();
-        setErrorMessage(errorData.error || `Download failed: HTTP ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Download error:', error);
-      setErrorMessage('An unexpected error occurred during download.');
-    }
+    // We expect the server to handle the download or redirect.
+    // The previous error handling for 401/403 will be handled by the server redirecting back
+    // to the main page with parameters, so this block is adjusted.
+    setDownloadResult('Attempting to download...'); // Provide immediate feedback
   };
 
   return (
@@ -298,9 +216,8 @@ function App() {
         </div>
 
         {/* Download Section - Main container for opacity control */}
-        {/* It's visible by default (!showDownloadPrompt) OR if showDownloadPrompt is true (for auto-download prompt) */}
         <div className={`p-4 border border-gray-200 rounded-md transition-opacity duration-300 
-          ${showDownloadPrompt ? 'opacity-100' : 'opacity-50'}`}> {/* Adjusted opacity: 100% when prompt is active, 50% otherwise */}
+          ${showDownloadPrompt ? 'opacity-100' : 'opacity-50'}`}>
           
           <h2 className="text-2xl font-semibold text-gray-700 mb-4">Download File</h2>
           {promptMessage && <p className="text-red-500 mb-2">{promptMessage}</p>}
