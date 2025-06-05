@@ -344,15 +344,14 @@ function App() {
               <table className="min-w-full bg-white rounded-md overflow-hidden">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase tracking-wider rounded-tl-md">File Name</th>
                     <th className="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase tracking-wider">Download Link</th>
                     <th className="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase tracking-wider rounded-tr-md">Upload Date</th>
+                    <th className="py-3 px-4 text-left text-sm font-semibold text-gray-600 uppercase tracking-wider rounded-tl-md">File Name</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {uploadedFiles.map((file, index) => (
                     <tr key={index} className="hover:bg-gray-50">
-                      <td className="py-3 px-4 text-sm text-gray-800 truncate overflow-hidden whitespace-nowrap max-w-xs">{file.fileName}</td> {/* Added truncation classes */}
                       <td className="py-3 px-4 text-sm">
                         <a 
                           href={file.downloadUrl} 
@@ -364,6 +363,7 @@ function App() {
                         </a>
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-800">{file.uploadedDate}</td>
+                      <td className="py-3 px-4 text-sm text-gray-800 truncate overflow-hidden whitespace-nowrap max-w-xs">{file.fileName}</td> {/* Added truncation classes */}
                     </tr>
                   ))}
                 </tbody>
