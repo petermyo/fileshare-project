@@ -187,4 +187,14 @@ app.all('*', (c) => {
     return c.notFound(); // Returns Hono's default 404 Not Found JSON
 });
 
-export default app;
+// Pages Function entry point: Cloudflare Pages automatically calls the onRequest export.
+// This is crucial for Pages Functions to be invoked.
+export const onRequest = async (context: PagesFunctionContext<Env>) => {
+  console.log('[onRequest] Pages Function triggered.');
+  console.log('Full Request URL from context:', context.request.url);
+  console.log('Request method from context:', context.request.method);
+  console.log('Request Path (from context.request.url):', new URL(context.request.url).pathname);
+
+  // Pass the request and environment context to your Hono app
+  return app.fetch(context.request, context.env);
+};
