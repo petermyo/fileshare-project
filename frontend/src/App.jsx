@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 
-// With Cloudflare Pages Functions, your API is on the same domain as your frontend.
-// The `functions/api/[[path]].ts` structure means Hono routes are prefixed with /api.
-const API_BASE_PATH = '/api'; // Use a relative path to your Pages Function
+// API_UPLOAD_PATH remains /api/upload as per your current backend (only download path changed)
+const API_UPLOAD_PATH = '/api/upload';
+// New path for downloads
+const DOWNLOAD_BASE_PATH = '/f';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -39,7 +40,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_PATH}/upload`, { // Call relative API path
+      const response = await fetch(API_UPLOAD_PATH, { // Upload path remains /api/upload
         method: 'POST',
         body: formData,
       });
@@ -48,8 +49,8 @@ function App() {
 
       if (response.ok && data.success) {
         setUploadResult({
-          // Construct the full short URL using window.location.origin to ensure it's on the Pages domain
-          shortUrl: `${window.location.origin}${API_BASE_PATH}/download/${data.shortUrlSlug}`,
+          // Construct the full short URL using window.location.origin and the NEW DOWNLOAD_BASE_PATH
+          shortUrl: `${window.location.origin}${DOWNLOAD_BASE_PATH}/${data.shortUrlSlug}`,
           originalFilename: data.originalFilename,
           isPrivate: data.isPrivate,
           expiryTimestamp: data.expiryTimestamp,
@@ -72,7 +73,8 @@ function App() {
       return;
     }
 
-    let downloadUrl = `${API_BASE_PATH}/download/${downloadSlug}`; // Call relative API path
+    // Construct download URL using the NEW DOWNLOAD_BASE_PATH
+    let downloadUrl = `${DOWNLOAD_BASE_PATH}/${downloadSlug}`;
     if (downloadPasscode) {
       downloadUrl += `?passcode=${downloadPasscode}`;
     }
