@@ -22,7 +22,7 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Apply CORS middleware to all routes handled by this function (prefixed by /api automatically).
+// Apply CORS middleware to all routes handled by this function.
 app.use('*', cors({
   origin: '*', // IMPORTANT: Adjust this to your Pages domain in production (e.g., 'https://fileshare-project.pages.dev')
   allowHeaders: ['Content-Type', 'Authorization'],
@@ -34,7 +34,7 @@ app.use('*', cors({
 // Middleware for logging request details (useful for debugging)
 app.use('*', async (c, next) => {
   console.log(`[Middleware] Processing ${c.req.method} request to: ${c.req.url}`);
-  console.log(`[Middleware] Path: ${c.req.path}`); // This will be the Hono path (e.g., /upload or /d/xyz)
+  console.log(`[Middleware] Path Hono sees: ${c.req.path}`); // This will be the full path Hono sees (e.g., /api/upload or /api/d/xyz)
   await next();
 });
 
@@ -72,8 +72,9 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-app.post('/upload', async (c) => {
-  console.log('[/upload POST] Hono route hit!');
+// Hono route now includes the /api/ prefix
+app.post('/api/upload', async (c) => { // CHANGED: Now /api/upload
+  console.log('[/api/upload POST] Hono route hit!');
   try {
     const formData = await c.req.formData();
     const file = formData.get('file');
@@ -135,8 +136,9 @@ app.post('/upload', async (c) => {
 });
 
 // --- API Endpoint for File Download/Retrieval ---
-app.get('/d/:slug', async (c) => {
-  console.log('[/d/:slug GET] Hono route hit!');
+// Hono route now includes the /api/ prefix
+app.get('/api/d/:slug', async (c) => { // CHANGED: Now /api/d/:slug
+  console.log('[/api/d/:slug GET] Hono route hit!');
   const slug = c.req.param('slug');
   const providedPasscode = c.req.query('passcode');
 
@@ -188,7 +190,6 @@ app.all('*', (c) => {
 });
 
 // Pages Function entry point: Cloudflare Pages automatically calls the onRequest export.
-// This is crucial for Pages Functions to be invoked.
 export const onRequest = async (context: PagesFunctionContext<Env>) => {
   console.log('[onRequest] Pages Function triggered.');
   console.log('Full Request URL from context:', context.request.url);
