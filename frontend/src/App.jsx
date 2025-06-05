@@ -30,6 +30,7 @@ function App() {
     const storedFiles = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (storedFiles) {
       setUploadedFiles(JSON.parse(storedFiles));
+      console.log("Loaded files from local storage:", JSON.parse(storedFiles)); // Debugging load
     }
 
     const searchParams = new URLSearchParams(window.location.search);
@@ -119,20 +120,26 @@ function App() {
         if (xhr.status >= 200 && xhr.status < 300) {
           const data = JSON.parse(xhr.responseText);
           if (data.success) {
+            // Construct the newUpload object with all required properties for display
             const newUpload = {
               fileId: data.shortUrlSlug, // Using slug as ID for list
               fileName: data.originalFilename,
               downloadUrl: `${window.location.origin}/s/${data.shortUrlSlug}`,
               uploadedDate: new Date().toLocaleString(),
+              isPrivate: data.isPrivate, // Include isPrivate
+              expiryTimestamp: data.expiryTimestamp, // Include expiryTimestamp
             };
-            setUploadResult(newUpload);
+            setUploadResult(newUpload); // Set the full object to uploadResult
             setDownloadSlug(data.shortUrlSlug);
             setUploadProgress(100); // Ensure it shows 100% on success
 
-            // Update local storage and state with the new file
-            const updatedFiles = [...uploadedFiles, newUpload];
-            setUploadedFiles(updatedFiles);
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedFiles));
+            // Update local storage and state with the new file using functional update
+            setUploadedFiles(prevFiles => {
+              const updated = [...prevFiles, newUpload];
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+              console.log("Updated files list in state and local storage:", updated); // Debugging update
+              return updated;
+            });
 
           } else {
             setErrorMessage(data.error || 'Upload failed. Please check the console for details.');
@@ -183,7 +190,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex flex-col items-center justify-center p-4">
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
 
@@ -193,7 +200,19 @@ function App() {
         }
       `}</style>
 
-      <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl"> {/* Flex container for two columns */}
+      {/* Top Center Home Link (as a button) */}
+      <div className="w-full max-w-4xl text-center mb-6">
+        <a 
+          href="https://www.myozarniaung.com/the-office" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="inline-block bg-blue-600 text-white py-2 px-6 rounded-full shadow-lg hover:bg-blue-700 transition duration-300 ease-in-out transform hover:scale-105" // Added button styles
+        >
+          Home
+        </a>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-8 w-full max-w-4xl">
         {/* Left Column: Upload and Download Sections */}
         <div className="flex-1 bg-white p-8 rounded-lg shadow-xl min-w-[320px]">
           <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">File Share Service</h1>
@@ -217,7 +236,7 @@ function App() {
                 file:text-sm file:font-semibold
                 file:bg-blue-50 file:text-blue-700
                 hover:file:bg-blue-100 mb-4"
-              disabled={isUploading} // Disable during upload
+              disabled={isUploading}
             />
             <input
               type="password"
@@ -225,17 +244,17 @@ function App() {
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
               className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 ${isPrivate ? '' : 'opacity-50'}`}
-              required={isPrivate} // Make required based on checkbox
-              disabled={!isPrivate || isUploading} // Disable if not private or during upload
+              required={isPrivate}
+              disabled={!isPrivate || isUploading}
             />
             <div className="flex items-center mb-4">
               <input
                 type="checkbox"
                 id="isPrivate"
                 checked={isPrivate}
-                onChange={handleIsPrivateChange} // Use custom handler
+                onChange={handleIsPrivateChange}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                disabled={isUploading} // Disable during upload
+                disabled={isUploading}
               />
               <label htmlFor="isPrivate" className="ml-2 text-gray-700">Make file private (requires passcode)</label>
             </div>
@@ -245,19 +264,19 @@ function App() {
               value={expiryDays}
               onChange={(e) => setExpiryDays(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-              disabled={isUploading} // Disable during upload
+              disabled={isUploading}
             />
             <button
               onClick={handleUpload}
               className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300 ease-in-out shadow-md"
-              disabled={isUploading} // Disable button during upload
+              disabled={isUploading}
             >
               {isUploading ? 'Uploading...' : 'Upload File'}
             </button>
 
             {/* Upload Progress Bar */}
             {isUploading && (
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4 mb-4"> {/* Added mb-4 here */}
                 <div
                   className="bg-blue-600 h-2.5 rounded-full"
                   style={{ width: `${uploadProgress}%` }}
@@ -269,7 +288,7 @@ function App() {
             {uploadResult && (
               <div className="mt-6 p-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-md">
                 <p className="font-semibold text-lg mb-2">Upload Successful!</p>
-                <p><strong>Short URL:</strong> <a href={uploadResult.shortUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">{uploadResult.shortUrl}</a></p>
+                <p><strong>Short URL:</strong> <a href={uploadResult.downloadUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">{uploadResult.downloadUrl}</a></p>
                 {uploadResult.isPrivate && <p className="text-orange-700">This file is private. Passcode is required for download.</p>}
                 {uploadResult.expiryTimestamp && (
                   <p><strong>Expires:</strong> {new Date(uploadResult.expiryTimestamp).toLocaleString()}</p>
@@ -290,7 +309,7 @@ function App() {
               value={downloadSlug}
               onChange={(e) => setDownloadSlug(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-              disabled={showDownloadPrompt} // Disable if auto-prompt is active
+              disabled={showDownloadPrompt}
             />
             <input
               type="password"
@@ -353,6 +372,11 @@ function App() {
           )}
         </div>
       </div>
+
+      {/* Footer with Copyright */}
+      <footer className="w-full max-w-4xl text-center mt-8 text-gray-600 text-sm">
+        &copy; {new Date().getFullYear()} Myo ZarNi Aung
+      </footer>
     </div>
   );
 }
