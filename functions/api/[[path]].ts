@@ -1,4 +1,4 @@
-// functions/api/[[path]].ts (Cloudflare Pages Function Backend)
+// functions/[[path]].ts (Cloudflare Pages Function Backend)
 import { Hono } from 'hono';
 import { v4 as uuidv4 } from 'uuid';
 import { cors } from 'hono/cors'; // Import CORS middleware for development/cross-origin access
@@ -24,12 +24,10 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Removed app.basePath('/api'); as routes will now explicitly include /api
+// NO app.basePath() here. Routes will now explicitly include their full paths.
 
-// Add CORS middleware to allow frontend (even on different local host/port) to access API
-// In a production setup where frontend and backend are on the same Pages domain, this might not be strictly necessary,
-// but it's good practice for development and potential cross-subdomain scenarios.
-app.use('/api/*', cors({ // Apply CORS to all routes under /api
+// Add CORS middleware. Apply CORS to all routes this function handles.
+app.use('*', cors({ // Apply CORS to all routes *this function* handles (e.g., /api/* and /f/*)
   origin: '*', // Adjust this to your frontend's actual domain(s) in production
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['POST', 'GET', 'OPTIONS'],
@@ -37,11 +35,11 @@ app.use('/api/*', cors({ // Apply CORS to all routes under /api
   credentials: true,
 }));
 
-// NEW: Add a middleware to log the path after basePath is applied and before specific routes
+// NEW: Add a middleware to log the path Hono sees
 app.use('*', async (c, next) => {
   console.log('[Middleware] Hono processing request.');
   console.log('[Middleware] Request Method:', c.req.method);
-  console.log('[Middleware] Request Path (c.req.path):', c.req.path); // This path should be the full path Hono sees (e.g., /api/upload)
+  console.log('[Middleware] Request Path (c.req.path):', c.req.path); // This path should be the full path (e.g., /api/upload or /f/xyz)
   console.log('[Middleware] Request URL (c.req.url):', c.req.url);   // This is the full URL
   await next();
 });
@@ -81,7 +79,7 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-// Route still explicitly includes '/api' prefix for upload
+// Route now explicitly includes '/api' prefix
 app.post('/api/upload', async (c) => {
   console.log('[/api/upload POST] Route hit!'); // This log should appear if matched
   try {
@@ -152,7 +150,7 @@ app.post('/api/upload', async (c) => {
 
 // --- API Endpoint for File Download/Retrieval ---
 // Route now explicitly includes '/f' prefix
-app.get('/f/:slug', async (c) => { // Changed from /api/download/:slug to /f/:slug
+app.get('/f/:slug', async (c) => { // Route explicitly defined as /f/:slug
   console.log('[/f/:slug GET] Route hit!'); // Updated log
   const slug = c.req.param('slug');
   const providedPasscode = c.req.query('passcode');
@@ -205,9 +203,8 @@ app.get('/f/:slug', async (c) => { // Changed from /api/download/:slug to /f/:sl
 
 
 // Fallback route for any other API requests that don't match the above
-// This fallback will now catch any request not starting with /api or /f
 app.all('*', (c) => {
-    console.log('[/api/*] Fallback route hit!'); // Original log for fallback, now it will also include /f/*
+    console.log('[*] Fallback route hit!'); // Updated log for the general fallback
     console.log('Fallback Request URL:', c.req.url);
     console.log('Fallback Request Path:', c.req.path);
     console.log('Fallback Request Method:', c.req.method);
@@ -219,7 +216,6 @@ export const onRequest = async (context: PagesFunctionContext<Env>) => {
   console.log('[onRequest] Pages Function triggered.');
   console.log('Full Request URL from context:', context.request.url);
   console.log('Request method from context:', context.request.method);
-  // Log the path relative to the function's base, which includes the /api/ prefix
   console.log('Request Path (from context.request.url):', new URL(context.request.url).pathname);
 
   return app.fetch(context.request, context.env);
