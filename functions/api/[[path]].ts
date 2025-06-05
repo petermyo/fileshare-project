@@ -71,6 +71,10 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 // --- API Endpoint for File Upload ---
 // This route will effectively be /api/upload due to the functions/api/[[path]].ts structure
 app.post('/upload', async (c) => {
+  console.log('[/api/upload POST] Route hit!');
+  console.log('Request URL:', c.req.url); // Log the full URL Hono sees
+  console.log('Request Path:', c.req.path); // Log the path relative to Hono's base
+  console.log('Request Method:', c.req.method); // Log the request method
   try {
     const formData = await c.req.formData();
     const file = formData.get('file');
@@ -140,6 +144,10 @@ app.post('/upload', async (c) => {
 // --- API Endpoint for File Download/Retrieval ---
 // This route will effectively be /api/download/:slug due to the functions/api/[[path]].ts structure
 app.get('/download/:slug', async (c) => {
+  console.log('[/api/download/:slug GET] Route hit!');
+  console.log('Request URL:', c.req.url);
+  console.log('Request Path:', c.req.path);
+  console.log('Request Method:', c.req.method);
   const slug = c.req.param('slug');
   const providedPasscode = c.req.query('passcode');
 
@@ -192,10 +200,20 @@ app.get('/download/:slug', async (c) => {
 
 // Fallback route for any other API requests that don't match the above
 app.all('*', (c) => {
+    console.log('[/api/*] Fallback route hit!');
+    console.log('Fallback Request URL:', c.req.url);
+    console.log('Fallback Request Path:', c.req.path);
+    console.log('Fallback Request Method:', c.req.method);
     return c.json({ success: false, message: 'API route not found or method not allowed.' }, 404);
 });
 
 // CRUCIAL CHANGE HERE: Explicitly pass context.request and context.env to app.fetch
 export const onRequest = async (context: PagesFunctionContext<Env>) => {
+  console.log('[onRequest] Pages Function triggered.');
+  console.log('Full Request URL from context:', context.request.url);
+  console.log('Request method from context:', context.request.method);
+  // Log the path relative to the function's base, which includes the /api/ prefix
+  console.log('Request Path (from context.request.url):', new URL(context.request.url).pathname);
+
   return app.fetch(context.request, context.env);
 };
