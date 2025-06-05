@@ -24,7 +24,7 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// NO app.basePath() here. Routes will now explicitly include their full paths.
+// Removed app.basePath('/api'); as routes will now explicitly include /api
 
 // Add CORS middleware. Apply CORS to all routes this function handles.
 app.use('*', cors({ // Apply CORS to all routes *this function* handles (e.g., /api/* and /f/*)
@@ -151,58 +151,77 @@ app.post('/api/upload', async (c) => {
 // --- API Endpoint for File Download/Retrieval ---
 // Route now explicitly includes '/f' prefix
 app.get('/f/:slug', async (c) => { // Route explicitly defined as /f/:slug
-  console.log('[/f/:slug GET] Route hit!'); // Updated log
-  const slug = c.req.param('slug');
-  const providedPasscode = c.req.query('passcode');
+  console.log('[/f/:slug GET] Route hit!'); // Updated log: this should appear if the route is matched
+  console.log('Download slug:', c.req.param('slug')); // Log the extracted slug
+  console.log('Provided passcode (if any):', c.req.query('passcode')); // Log the passcode
 
-  // Retrieve file metadata from D1
-  const { results } = await c.env.DB.prepare(
-    'SELECT * FROM files WHERE short_url_slug = ?'
-  ).bind(slug).all();
+  try {
+    const slug = c.req.param('slug');
+    const providedPasscode = c.req.query('passcode');
 
-  if (!results || results.length === 0) {
-    return c.json({ success: false, error: 'File not found.' }, 404);
-  }
+    // Retrieve file metadata from D1 - FIXED TYPO HERE
+    const { results } = await c.env.DB.prepare(
+      'SELECT * FROM files WHERE short_url_slug = ?' // Corrected from 'SELECT * FROM FROM files'
+    ).bind(slug).all();
 
-  const fileMetadata = results[0] as any; // Cast for easier property access
+    console.log('D1 query results:', results); // Log D1 results
 
-  // 1. Check for expiry
-  if (fileMetadata.expiry_timestamp && Date.now() > fileMetadata.expiry_timestamp) {
-    // Optionally, you could also delete the file from R2 and D1 here
-    // await c.env.FILES_BUCKET.delete(`files/${fileMetadata.id}-${fileMetadata.original_filename}`);
-    // await c.env.DB.prepare('DELETE FROM files WHERE id = ?').bind(fileMetadata.id).run();
-    return c.json({ success: false, error: 'This file has expired and is no longer available.' }, 410); // 410 Gone
-  }
-
-  // 2. Check for privacy and passcode
-  if (fileMetadata.is_private === 1) { // D1 boolean is 1 for true
-    if (!providedPasscode) {
-      return c.json({ success: false, error: 'This file is private and requires a passcode. Please provide it as a query parameter (e.g., ?passcode=YOUR_PASSCODE).' }, 401);
+    if (!results || results.length === 0) {
+      console.log('File metadata not found for slug:', slug);
+      return c.json({ success: false, error: 'File not found.' }, 404);
     }
-    const providedPasscodeHash = await hashPasscode(providedPasscode);
-    if (providedPasscodeHash !== fileMetadata.passcode_hash) {
-      return c.json({ success: false, error: 'Invalid passcode provided.' }, 403);
+
+    const fileMetadata = results[0] as any; // Cast for easier property access
+    console.log('File metadata from D1:', fileMetadata); // Log retrieved metadata
+
+    // 1. Check for expiry
+    if (fileMetadata.expiry_timestamp && Date.now() > fileMetadata.expiry_timestamp) {
+      console.log('File expired:', slug);
+      // Optionally, you could also delete the file from R2 and D1 here
+      // await c.env.FILES_BUCKET.delete(`files/${fileMetadata.id}-${fileMetadata.original_filename}`);
+      // await c.env.DB.prepare('DELETE FROM files WHERE id = ?').bind(fileMetadata.id).run();
+      return c.json({ success: false, error: 'This file has expired and is no longer available.' }, 410); // 410 Gone
     }
+
+    // 2. Check for privacy and passcode
+    if (fileMetadata.is_private === 1) { // D1 boolean is 1 for true
+      if (!providedPasscode) {
+        console.log('Private file, no passcode provided.');
+        return c.json({ success: false, error: 'This file is private and requires a passcode. Please provide it as a query parameter (e.g., ?passcode=YOUR_PASSCODE).' }, 401);
+      }
+      const providedPasscodeHash = await hashPasscode(providedPasscode);
+      if (providedPasscodeHash !== fileMetadata.passcode_hash) {
+        console.log('Private file, invalid passcode.');
+        return c.json({ success: false, error: 'Invalid passcode provided.' }, 403);
+      }
+    }
+
+    // 3. Retrieve the file from R2
+    const r2ObjectKey = `files/${fileMetadata.id}-${fileMetadata.original_filename}`;
+    console.log('Attempting to retrieve from R2 with key:', r2ObjectKey);
+    const object = await c.env.FILES_BUCKET.get(r2ObjectKey);
+
+    if (!object) {
+      console.log('File content not found in R2 for key:', r2ObjectKey);
+      return c.json({ success: false, error: 'File content not found in storage.' }, 404);
+    }
+    console.log('File object retrieved from R2.');
+
+    // Set appropriate headers for file download
+    c.header('Content-Type', fileMetadata.mime_type || 'application/octet-stream');
+    c.header('Content-Disposition', `attachment; filename="${fileMetadata.original_filename}"`);
+    c.header('Content-Length', fileMetadata.file_size.toString());
+
+    return c.body(object.body); // Stream the file content
+  } catch (error) {
+    console.error('Download route handler error:', error); // Catch any unexpected errors in download
+    return c.json({ success: false, error: 'An unexpected error occurred during download.' }, 500);
   }
-
-  // 3. Retrieve the file from R2
-  const r2ObjectKey = `files/${fileMetadata.id}-${fileMetadata.original_filename}`;
-  const object = await c.env.FILES_BUCKET.get(r2ObjectKey);
-
-  if (!object) {
-    return c.json({ success: false, error: 'File content not found in storage.' }, 404);
-  }
-
-  // Set appropriate headers for file download
-  c.header('Content-Type', fileMetadata.mime_type || 'application/octet-stream');
-  c.header('Content-Disposition', `attachment; filename="${fileMetadata.original_filename}"`);
-  c.header('Content-Length', fileMetadata.file_size.toString());
-
-  return c.body(object.body); // Stream the file content
 });
 
 
 // Fallback route for any other API requests that don't match the above
+// This fallback will now catch any request not starting with /api or /f
 app.all('*', (c) => {
     console.log('[*] Fallback route hit!'); // Updated log for the general fallback
     console.log('Fallback Request URL:', c.req.url);
