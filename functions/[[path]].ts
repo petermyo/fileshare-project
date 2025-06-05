@@ -39,13 +39,9 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-// --- NEW: Root Route for Backend Fallback ---
-// This route will only be hit if _routes.json fails to serve the static frontend
-// and the request falls through to the function. It's a clearer fallback than the generic 404.
-app.get('/', (c) => {
-  console.log('[/ GET] Backend root route hit (should ideally be served by static frontend)!');
-  return c.text('Welcome to the File Share API! If you see this, the static frontend might not be loading.');
-});
+// --- REMOVED: Root Route for Backend Fallback ---
+// This route was removed to ensure _routes.json correctly handles static asset serving for '/'
+// If the static frontend is not loading after this change, the issue is definitively with _routes.json.
 
 // Helper function to hash a string using SHA-256 (for passcodes)
 async function hashPasscode(passcode: string): Promise<string> {
@@ -123,7 +119,7 @@ app.post('/api/upload', async (c) => {
       file.name,
       file.type,
       file.size,
-      Date.now(), // Corrected: ensure this is Date.now()
+      Date.now(),
       expiryTimestamp,
       passcodeHash,
       isPrivate ? 1 : 0
@@ -206,6 +202,7 @@ app.get('/f/:slug', async (c) => {
 });
 
 // Fallback route for any other requests that don't match the above
+// This route will now catch anything that wasn't /api/* or /f/* if _routes.json fails.
 app.all('*', (c) => {
     console.log('[*] Fallback route hit!');
     console.log('Fallback Request URL:', c.req.url);
