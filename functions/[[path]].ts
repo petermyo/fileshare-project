@@ -1,17 +1,16 @@
 // functions/[[path]].ts (Cloudflare Pages Function Backend)
+// This file should be directly inside the 'functions' directory, NOT 'functions/api'
 import { Hono } from 'hono';
 import { v4 as uuidv4 } from 'uuid';
-import { cors } from 'hono/cors'; // Import CORS middleware for development/cross-origin access
+import { cors } from 'hono/cors'; // Import CORS middleware
 
-// Define the environment variables (bindings) that Cloudflare Pages Functions will inject
-// Also define the PagesFunctionContext type for explicit context handling
+// Define the environment variables (bindings)
 interface Env {
   FILES_BUCKET: R2Bucket;
   DB: D1Database;
 }
 
-// PagesFunctionContext type for explicit context handling
-// This type is automatically provided by Cloudflare Pages runtime.
+// PagesFunctionContext type for explicit context handling (provided by Cloudflare Pages runtime)
 interface PagesFunctionContext<Env> {
   request: Request;
   env: Env;
@@ -21,29 +20,24 @@ interface PagesFunctionContext<Env> {
   passThroughOnException: () => void;
 }
 
-
 const app = new Hono<{ Bindings: Env }>();
 
-// Removed app.basePath('/api'); as routes will now explicitly include /api
-
-// Add CORS middleware. Apply CORS to all routes this function handles.
-app.use('*', cors({ // Apply CORS to all routes *this function* handles (e.g., /api/* and /f/*)
-  origin: '*', // Adjust this to your frontend's actual domain(s) in production
+// Apply CORS middleware to all routes handled by this function.
+// Since [[path]].ts is at the root of 'functions', it catches all non-static requests.
+app.use('*', cors({
+  origin: '*', // IMPORTANT: Adjust to your frontend's actual domain(s) in production (e.g., 'https://fileshare-project.pages.dev')
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['POST', 'GET', 'OPTIONS'],
   maxAge: 600,
   credentials: true,
 }));
 
-// NEW: Add a middleware to log the path Hono sees
+// Middleware for logging request details (useful for debugging)
 app.use('*', async (c, next) => {
-  console.log('[Middleware] Hono processing request.');
-  console.log('[Middleware] Request Method:', c.req.method);
-  console.log('[Middleware] Request Path (c.req.path):', c.req.path); // This path should be the full path (e.g., /api/upload or /f/xyz)
-  console.log('[Middleware] Request URL (c.req.url):', c.req.url);   // This is the full URL
+  console.log(`[Middleware] Processing ${c.req.method} request to: ${c.req.url}`);
+  console.log(`[Middleware] Path: ${c.req.path}`); // This will be the full path Hono sees (e.g., /api/upload or /f/xyz)
   await next();
 });
-
 
 // Helper function to hash a string using SHA-256 (for passcodes)
 async function hashPasscode(passcode: string): Promise<string> {
@@ -79,15 +73,15 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-// Route now explicitly includes '/api' prefix
+// Explicitly define the '/api/upload' route
 app.post('/api/upload', async (c) => {
-  console.log('[/api/upload POST] Route hit!'); // This log should appear if matched
+  console.log('[/api/upload POST] Route hit!');
   try {
     const formData = await c.req.formData();
     const file = formData.get('file');
     const passcode = formData.get('passcode') as string | null;
     const expiryDays = formData.get('expiryDays') as string | null;
-    const isPrivate = formData.get('isPrivate') === 'true'; // Checkbox value as string
+    const isPrivate = formData.get('isPrivate') === 'true';
 
     if (!file || typeof file === 'string') {
       return c.json({ success: false, error: 'No file uploaded or file is not a Blob/File.' }, 400);
@@ -95,8 +89,7 @@ app.post('/api/upload', async (c) => {
 
     const fileId = uuidv4(); // Unique ID for the file object in R2
     const shortUrlSlug = await generateShortUrlSlug(c.env); // Unique short URL
-    // R2 Object Key: files/<UUID>-<OriginalFilename> to keep original name reference
-    const r2ObjectKey = `files/${fileId}-${file.name}`;
+    const r2ObjectKey = `files/${fileId}-${file.name}`; // R2 Key format
 
     let passcodeHash: string | null = null;
     if (passcode && passcode.length > 0) {
@@ -105,13 +98,11 @@ app.post('/api/upload', async (c) => {
 
     let expiryTimestamp: number | null = null;
     if (expiryDays && !isNaN(parseInt(expiryDays)) && parseInt(expiryDays) > 0) {
-      // Calculate expiry in milliseconds from now
-      expiryTimestamp = Date.now() + parseInt(expiryDays) * 24 * 60 * 60 * 1000;
+      expiryTimestamp = Date.now() + parseInt(expiryDays) * 24 * 60 * 60 * 1000; // Expiry in milliseconds
     }
 
     // Upload the file to Cloudflare R2
     await c.env.FILES_BUCKET.put(r2ObjectKey, file.stream(), {
-        // Optional: Set some R2 metadata if needed
         httpMetadata: {
             contentType: file.type,
         }
@@ -130,10 +121,9 @@ app.post('/api/upload', async (c) => {
       Date.now(),
       expiryTimestamp,
       passcodeHash,
-      isPrivate ? 1 : 0 // D1 stores booleans as 0 or 1
+      isPrivate ? 1 : 0
     ).run();
 
-    // The frontend will now construct the URL based on the Pages domain + /download/slug
     return c.json({
       success: true,
       shortUrlSlug: shortUrlSlug,
@@ -149,22 +139,22 @@ app.post('/api/upload', async (c) => {
 });
 
 // --- API Endpoint for File Download/Retrieval ---
-// Route now explicitly includes '/f' prefix
-app.get('/f/:slug', async (c) => { // Route explicitly defined as /f/:slug
-  console.log('[/f/:slug GET] Route hit!'); // Updated log: this should appear if the route is matched
-  console.log('Download slug:', c.req.param('slug')); // Log the extracted slug
-  console.log('Provided passcode (if any):', c.req.query('passcode')); // Log the passcode
+// Explicitly define the '/f/:slug' route
+app.get('/f/:slug', async (c) => {
+  console.log('[/f/:slug GET] Route hit!');
+  console.log('Download slug:', c.req.param('slug'));
+  console.log('Provided passcode (if any):', c.req.query('passcode'));
 
   try {
     const slug = c.req.param('slug');
     const providedPasscode = c.req.query('passcode');
 
-    // Retrieve file metadata from D1 - FIXED TYPO HERE
+    // Retrieve file metadata from D1
     const { results } = await c.env.DB.prepare(
-      'SELECT * FROM files WHERE short_url_slug = ?' // Corrected from 'SELECT * FROM FROM files'
+      'SELECT * FROM files WHERE short_url_slug = ?'
     ).bind(slug).all();
 
-    console.log('D1 query results:', results); // Log D1 results
+    console.log('D1 query results:', results);
 
     if (!results || results.length === 0) {
       console.log('File metadata not found for slug:', slug);
@@ -172,19 +162,16 @@ app.get('/f/:slug', async (c) => { // Route explicitly defined as /f/:slug
     }
 
     const fileMetadata = results[0] as any; // Cast for easier property access
-    console.log('File metadata from D1:', fileMetadata); // Log retrieved metadata
+    console.log('File metadata from D1:', fileMetadata);
 
     // 1. Check for expiry
     if (fileMetadata.expiry_timestamp && Date.now() > fileMetadata.expiry_timestamp) {
       console.log('File expired:', slug);
-      // Optionally, you could also delete the file from R2 and D1 here
-      // await c.env.FILES_BUCKET.delete(`files/${fileMetadata.id}-${fileMetadata.original_filename}`);
-      // await c.env.DB.prepare('DELETE FROM files WHERE id = ?').bind(fileMetadata.id).run();
-      return c.json({ success: false, error: 'This file has expired and is no longer available.' }, 410); // 410 Gone
+      return c.json({ success: false, error: 'This file has expired and is no longer available.' }, 410);
     }
 
     // 2. Check for privacy and passcode
-    if (fileMetadata.is_private === 1) { // D1 boolean is 1 for true
+    if (fileMetadata.is_private === 1) {
       if (!providedPasscode) {
         console.log('Private file, no passcode provided.');
         return c.json({ success: false, error: 'This file is private and requires a passcode. Please provide it as a query parameter (e.g., ?passcode=YOUR_PASSCODE).' }, 401);
@@ -214,23 +201,22 @@ app.get('/f/:slug', async (c) => { // Route explicitly defined as /f/:slug
 
     return c.body(object.body); // Stream the file content
   } catch (error) {
-    console.error('Download route handler error:', error); // Catch any unexpected errors in download
+    console.error('Download route handler error:', error);
     return c.json({ success: false, error: 'An unexpected error occurred during download.' }, 500);
   }
 });
 
 
-// Fallback route for any other API requests that don't match the above
-// This fallback will now catch any request not starting with /api or /f
+// Fallback route for any other requests that don't match the above
 app.all('*', (c) => {
-    console.log('[*] Fallback route hit!'); // Updated log for the general fallback
+    console.log('[*] Fallback route hit!');
     console.log('Fallback Request URL:', c.req.url);
     console.log('Fallback Request Path:', c.req.path);
     console.log('Fallback Request Method:', c.req.method);
     return c.json({ success: false, message: 'API route not found or method not allowed.' }, 404);
 });
 
-// CRUCIAL CHANGE HERE: Explicitly pass context.request and context.env to app.fetch
+// Pages Function entry point
 export const onRequest = async (context: PagesFunctionContext<Env>) => {
   console.log('[onRequest] Pages Function triggered.');
   console.log('Full Request URL from context:', context.request.url);
