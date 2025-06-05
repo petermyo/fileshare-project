@@ -4,11 +4,23 @@ import { v4 as uuidv4 } from 'uuid';
 import { cors } from 'hono/cors'; // Import CORS middleware for development/cross-origin access
 
 // Define the environment variables (bindings) that Cloudflare Pages Functions will inject
+// Also define the PagesFunctionContext type for explicit context handling
 interface Env {
   FILES_BUCKET: R2Bucket;
   DB: D1Database;
-  // Pages Functions also get other standard bindings like `request.env`
 }
+
+// PagesFunctionContext type for explicit context handling
+// This type is automatically provided by Cloudflare Pages runtime.
+interface PagesFunctionContext<Env> {
+  request: Request;
+  env: Env;
+  params: Record<string, string | string[]>;
+  waitUntil: (promise: Promise<any>) => void;
+  next: (input?: Request | string, init?: RequestInit) => Promise<Response>;
+  passThroughOnException: () => void;
+}
+
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -183,7 +195,7 @@ app.all('*', (c) => {
     return c.json({ success: false, message: 'API route not found or method not allowed.' }, 404);
 });
 
-// The entry point for Pages Functions.
-// The `c.req.url` will reflect the full URL, including the Pages domain and the /api/ prefix.
-// Hono will handle the routing based on the paths defined within the `app` instance.
-export const onRequest = app.fetch;
+// CRUCIAL CHANGE HERE: Explicitly pass context.request and context.env to app.fetch
+export const onRequest = async (context: PagesFunctionContext<Env>) => {
+  return app.fetch(context.request, context.env);
+};
