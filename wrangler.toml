@@ -1,7 +1,7 @@
 # wrangler.toml (at the root of your project)
 name = "fileshare-project" # Name of your Cloudflare Pages project
 pages_build_output_dir = "./frontend/dist" # The output directory of your frontend build
-#functions_directory = "./functions" # The directory containing your Pages Functions
+functions_directory = "./functions" # The directory containing your Pages Functions
 
 compatibility_date = "2025-06-05" # Use the current date or later
 
