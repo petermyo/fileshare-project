@@ -24,10 +24,7 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Set the base path for Hono. This is crucial for Pages Functions
-// because the [[path]].ts catches requests at /api/*, so Hono expects /api/
-app.basePath('/api');
-
+// Removed app.basePath('/api'); as routes will now explicitly include /api
 
 // Add CORS middleware to allow frontend (even on different local host/port) to access API
 // In a production setup where frontend and backend are on the same Pages domain, this might not be strictly necessary,
@@ -44,7 +41,7 @@ app.use('/api/*', cors({ // Apply CORS to all routes under /api
 app.use('*', async (c, next) => {
   console.log('[Middleware] Hono processing request.');
   console.log('[Middleware] Request Method:', c.req.method);
-  console.log('[Middleware] Request Path (c.req.path):', c.req.path); // This path should be relative to basePath now (e.g., /upload)
+  console.log('[Middleware] Request Path (c.req.path):', c.req.path); // This path should be the full path Hono sees (e.g., /api/upload)
   console.log('[Middleware] Request URL (c.req.url):', c.req.url);   // This is the full URL
   await next();
 });
@@ -84,8 +81,8 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-// This route will now match /api/upload due to app.basePath('/api')
-app.post('/upload', async (c) => {
+// Route now explicitly includes '/api' prefix
+app.post('/api/upload', async (c) => {
   console.log('[/api/upload POST] Route hit!'); // This log should appear if matched
   try {
     const formData = await c.req.formData();
@@ -154,8 +151,8 @@ app.post('/upload', async (c) => {
 });
 
 // --- API Endpoint for File Download/Retrieval ---
-// This route will now match /api/download/:slug due to app.basePath('/api')
-app.get('/download/:slug', async (c) => {
+// Route now explicitly includes '/api' prefix
+app.get('/api/download/:slug', async (c) => {
   console.log('[/api/download/:slug GET] Route hit!'); // This log should appear if matched
   const slug = c.req.param('slug');
   const providedPasscode = c.req.query('passcode');
