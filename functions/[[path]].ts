@@ -208,7 +208,7 @@ app.all('*', (c) => {
     console.log('Fallback Request URL:', c.req.url);
     console.log('Fallback Request Path:', c.req.path);
     console.log('Fallback Request Method:', c.req.method);
-    return c.json({ success: false, message: 'API route not found or method not allowed.' }, 404);
+    return c.notFound(); // Changed to Hono's c.notFound()
 });
 
 // Pages Function entry point
