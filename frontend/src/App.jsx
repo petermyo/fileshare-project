@@ -1,9 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'; // Corrected: changed '=>' to 'from'
 
-// API_UPLOAD_PATH remains /api/upload
-const API_UPLOAD_PATH = '/api/upload';
-// DOWNLOAD_BASE_PATH is now /f
-const DOWNLOAD_BASE_PATH = '/s';
+const API_BASE_PATH = '/api'; // All backend API calls will start with /api
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -31,16 +28,17 @@ function App() {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
-    if (passcode) {
+    // Only append passcode if isPrivate is true AND passcode is provided
+    if (isPrivate && passcode) {
       formData.append('passcode', passcode);
     }
-    formData.append('isPrivate', isPrivate.toString());
+    formData.append('isPrivate', isPrivate.toString()); // Ensure this is 'true' or 'false' string
     if (expiryDays) {
       formData.append('expiryDays', expiryDays);
     }
 
     try {
-      const response = await fetch(API_UPLOAD_PATH, {
+      const response = await fetch(`/api/upload`, { // Call the API endpoint at /api/upload
         method: 'POST',
         body: formData,
       });
@@ -49,8 +47,8 @@ function App() {
 
       if (response.ok && data.success) {
         setUploadResult({
-          // Construct the full short URL using window.location.origin and the NEW DOWNLOAD_BASE_PATH
-          shortUrl: `${window.location.origin}${DOWNLOAD_BASE_PATH}/${data.shortUrlSlug}`,
+          // Construct the full short URL using the new /s/:slug route (without /api prefix for user-facing URL)
+          shortUrl: `${window.location.origin}/s/${data.shortUrlSlug}`, // Changed to /s/:slug
           originalFilename: data.originalFilename,
           isPrivate: data.isPrivate,
           expiryTimestamp: data.expiryTimestamp,
@@ -73,25 +71,23 @@ function App() {
       return;
     }
 
-    // Construct download URL using the NEW DOWNLOAD_BASE_PATH
-    let downloadUrl = `${DOWNLOAD_BASE_PATH}/${downloadSlug}`;
+    // Now, the download button will attempt to access the /s/:slug directly
+    // and pass the passcode as a query parameter.
+    let downloadUrl = `${window.location.origin}/s/${downloadSlug}`; // Direct call to /s/:slug for download
     if (downloadPasscode) {
       downloadUrl += `?passcode=${downloadPasscode}`;
     }
 
     try {
-      // Use a regular fetch to get the file. The browser will handle the download
       const response = await fetch(downloadUrl);
 
       if (response.ok) {
-        // Create a blob from the response and trigger download
         const blob = await response.blob();
         const contentDisposition = response.headers.get('Content-Disposition');
         let filename = 'downloaded-file';
         if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
             filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
         } else {
-            // Fallback: try to guess extension or use slug if no filename in header
             const mimeType = response.headers.get('Content-Type');
             if (mimeType) {
                 const parts = mimeType.split('/');
@@ -111,7 +107,7 @@ function App() {
         window.URL.revokeObjectURL(url);
         setDownloadResult('File download initiated successfully.');
       } else {
-        const errorData = await response.json(); // Pages Function returns JSON error
+        const errorData = await response.json();
         setErrorMessage(errorData.error || `Download failed: HTTP ${response.status}`);
       }
     } catch (error) {
@@ -188,7 +184,6 @@ function App() {
           {uploadResult && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-md">
               <p className="font-semibold text-lg mb-2">Upload Successful!</p>
-              <p><strong>Original File:</strong> {uploadResult.originalFilename}</p>
               <p><strong>Short URL:</strong> <a href={uploadResult.shortUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">{uploadResult.shortUrl}</a></p>
               {uploadResult.isPrivate && <p className="text-orange-700">This file is private. Passcode is required for download.</p>}
               {uploadResult.expiryTimestamp && (
