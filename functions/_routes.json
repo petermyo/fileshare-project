@@ -1,7 +1,13 @@
 {
   "version": 1,
+  "include": [
+    "/*"
+  ],
   "exclude": [
     "/api/*",
     "/f/*"
-  ]
+  ],
+  "fallthrough": {
+    "static": true
+  }
 }
