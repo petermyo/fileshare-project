@@ -1,5 +1,5 @@
     {
-      "name": "your-fileshare-project",
+      "name": "fileshare-project",
       "version": "1.0.0",
       "description": "File Share Service with Cloudflare Pages, R2, and D1",
       "main": "index.js",
