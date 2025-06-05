@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "description": "Route API and /f paths to Pages Function; all other paths default to static assets.",
+  "routes": [
+    { "pattern": "/api/*" },
+    { "pattern": "/f/*" }
+  ]
+}
