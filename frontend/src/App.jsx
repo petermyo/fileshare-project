@@ -1,4 +1,4 @@
-import React, { useState } from 'react'; // Corrected: changed '=>' to 'from'
+import React, { useState, useRef, useEffect } from 'react';
 
 const API_BASE_PATH = '/api'; // All backend API calls will start with /api
 
@@ -9,13 +9,102 @@ function App() {
   const [expiryDays, setExpiryDays] = useState('');
   const [uploadResult, setUploadResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // State for download section
   const [downloadSlug, setDownloadSlug] = useState('');
   const [downloadPasscode, setDownloadPasscode] = useState('');
   const [downloadResult, setDownloadResult] = useState('');
+  const [showDownloadPrompt, setShowDownloadPrompt] = useState(false); // Controls visibility of download box
+  const [promptMessage, setPromptMessage] = useState(''); // Message shown when prompting for passcode
+
+  const passcodeRef = useRef(null); // Ref to focus the passcode input
+
+  // Effect to handle URL-based downloads (e.g., /s/SLUG or /s/SLUG?passcode=X)
+  useEffect(() => {
+    const path = window.location.pathname;
+    const searchParams = new URLSearchParams(window.location.search);
+    const slugMatch = path.match(/^\/s\/([a-zA-Z0-9]+)$/);
+
+    if (slugMatch) {
+      const slugFromUrl = slugMatch[1];
+      const passcodeFromUrl = searchParams.get('passcode');
+
+      setDownloadSlug(slugFromUrl);
+      setDownloadPasscode(passcodeFromUrl || ''); // Pre-fill if present in URL
+
+      // Attempt to download directly if passcode is in URL, otherwise show prompt
+      const initiateAutoDownload = async () => {
+        try {
+          const urlToFetch = `${window.location.origin}/s/${slugFromUrl}${passcodeFromUrl ? `?passcode=${passcodeFromUrl}` : ''}`;
+          const response = await fetch(urlToFetch);
+
+          if (response.ok) {
+            // If download successful, trigger browser download
+            const blob = await response.blob();
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'downloaded-file';
+            if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
+                filename = contentDisposition.split('filename=')[1].replace(/"/g, '');
+            } else {
+                const mimeType = response.headers.get('Content-Type');
+                if (mimeType) {
+                    const parts = mimeType.split('/');
+                    if (parts.length > 1) {
+                        filename = `${slugFromUrl}.${parts[1]}`;
+                    }
+                }
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            setDownloadResult('File download initiated successfully.');
+            setShowDownloadPrompt(false); // Hide prompt if successful
+            // Clear URL params after successful download to prevent re-download on refresh
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+          } else if (response.status === 401 || response.status === 403) {
+            // Passcode required or invalid, show download prompt
+            setShowDownloadPrompt(true);
+            setPromptMessage('This file is private. Please enter the passcode to download.');
+            setDownloadPasscode(''); // Clear old passcode
+            if (passcodeRef.current) {
+              passcodeRef.current.focus(); // Focus on passcode input
+            }
+          } else {
+            const errorData = await response.json();
+            setErrorMessage(errorData.error || `Download failed: HTTP ${response.status}`);
+            setShowDownloadPrompt(true); // Keep prompt open to show error
+          }
+        } catch (error) {
+          console.error('Auto download error:', error);
+          setErrorMessage('An unexpected error occurred during automatic download.');
+          setShowDownloadPrompt(true); // Keep prompt open to show error
+        }
+      };
+
+      initiateAutoDownload();
+    }
+  }, [window.location.pathname]);
+
 
   const handleFileChange = (event) => {
     setSelectedFile(event.target.files[0]);
     setErrorMessage('');
+  };
+
+  // Toggle private status and clear/manage passcode field accordingly
+  const handleIsPrivateChange = (event) => {
+    const checked = event.target.checked;
+    setIsPrivate(checked);
+    if (!checked) {
+      setPasscode(''); // Clear passcode if no longer private
+    }
   };
 
   const handleUpload = async () => {
@@ -26,19 +115,24 @@ function App() {
       return;
     }
 
+    // Passcode validation on upload
+    if (isPrivate && !passcode) {
+      setErrorMessage('Passcode is required for private files.');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', selectedFile);
-    // Only append passcode if isPrivate is true AND passcode is provided
-    if (isPrivate && passcode) {
+    if (isPrivate && passcode) { // Only append if private and provided
       formData.append('passcode', passcode);
     }
-    formData.append('isPrivate', isPrivate.toString()); // Ensure this is 'true' or 'false' string
+    formData.append('isPrivate', isPrivate.toString());
     if (expiryDays) {
       formData.append('expiryDays', expiryDays);
     }
 
     try {
-      const response = await fetch(`/api/upload`, { // Call the API endpoint at /api/upload
+      const response = await fetch(`/api/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -47,13 +141,12 @@ function App() {
 
       if (response.ok && data.success) {
         setUploadResult({
-          // Construct the full short URL using the new /s/:slug route (without /api prefix for user-facing URL)
-          shortUrl: `${window.location.origin}/s/${data.shortUrlSlug}`, // Changed to /s/:slug
+          shortUrl: `${window.location.origin}/s/${data.shortUrlSlug}`,
           originalFilename: data.originalFilename,
           isPrivate: data.isPrivate,
           expiryTimestamp: data.expiryTimestamp,
         });
-        setDownloadSlug(data.shortUrlSlug); // Pre-fill for easy testing
+        setDownloadSlug(data.shortUrlSlug);
       } else {
         setErrorMessage(data.error || 'Upload failed. Please check the console for details.');
       }
@@ -71,9 +164,7 @@ function App() {
       return;
     }
 
-    // Now, the download button will attempt to access the /s/:slug directly
-    // and pass the passcode as a query parameter.
-    let downloadUrl = `${window.location.origin}/s/${downloadSlug}`; // Direct call to /s/:slug for download
+    let downloadUrl = `${window.location.origin}/s/${downloadSlug}`;
     if (downloadPasscode) {
       downloadUrl += `?passcode=${downloadPasscode}`;
     }
@@ -106,6 +197,17 @@ function App() {
         a.remove();
         window.URL.revokeObjectURL(url);
         setDownloadResult('File download initiated successfully.');
+        setShowDownloadPrompt(false); // Hide prompt if successful manual download
+        setDownloadPasscode(''); // Clear passcode
+      } else if (response.status === 401 || response.status === 403) {
+        const errorData = await response.json();
+        setErrorMessage(errorData.error || 'Passcode required or invalid.');
+        setPromptMessage(errorData.error || 'Please enter the correct passcode.');
+        setShowDownloadPrompt(true); // Ensure download prompt is visible
+        setDownloadPasscode(''); // Clear old passcode
+        if (passcodeRef.current) {
+          passcodeRef.current.focus(); // Focus on passcode input
+        }
       } else {
         const errorData = await response.json();
         setErrorMessage(errorData.error || `Download failed: HTTP ${response.status}`);
@@ -137,8 +239,8 @@ function App() {
           </div>
         )}
 
-        {/* Upload Section */}
-        <div className="mb-8 p-4 border border-gray-200 rounded-md">
+        {/* Upload Section (opacity controlled) */}
+        <div className={`mb-8 p-4 border border-gray-200 rounded-md transition-opacity duration-300 ${showDownloadPrompt ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
           <h2 className="text-2xl font-semibold text-gray-700 mb-4">Upload File</h2>
           <input
             type="file"
@@ -155,14 +257,16 @@ function App() {
             placeholder="Optional: Passcode for private files"
             value={passcode}
             onChange={(e) => setPasscode(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 ${isPrivate ? '' : 'opacity-50'}`}
+            required={isPrivate} // Make required based on checkbox
+            disabled={!isPrivate} // Disable if not private
           />
           <div className="flex items-center mb-4">
             <input
               type="checkbox"
               id="isPrivate"
               checked={isPrivate}
-              onChange={(e) => setIsPrivate(e.target.checked)}
+              onChange={handleIsPrivateChange} // Use custom handler
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
             <label htmlFor="isPrivate" className="ml-2 text-gray-700">Make file private (requires passcode)</label>
@@ -193,21 +297,27 @@ function App() {
           )}
         </div>
 
-        {/* Download Section */}
-        <div className="p-4 border border-gray-200 rounded-md">
+        {/* Download Section - Main container for opacity control */}
+        {/* It's visible by default (!showDownloadPrompt) OR if showDownloadPrompt is true (for auto-download prompt) */}
+        <div className={`p-4 border border-gray-200 rounded-md transition-opacity duration-300 
+          ${showDownloadPrompt ? 'opacity-100' : 'opacity-50'}`}> {/* Adjusted opacity: 100% when prompt is active, 50% otherwise */}
+          
           <h2 className="text-2xl font-semibold text-gray-700 mb-4">Download File</h2>
+          {promptMessage && <p className="text-red-500 mb-2">{promptMessage}</p>}
           <input
             type="text"
             placeholder="Enter Short URL Slug (e.g., abcde1)"
             value={downloadSlug}
             onChange={(e) => setDownloadSlug(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            disabled={showDownloadPrompt} // Disable if auto-prompt is active
           />
           <input
             type="password"
             placeholder="Passcode (if required)"
             value={downloadPasscode}
             onChange={(e) => setDownloadPasscode(e.target.value)}
+            ref={passcodeRef}
             className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
           />
           <button
