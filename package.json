@@ -1,30 +1,31 @@
-{
-  "name": "your-fileshare-project",
-  "version": "1.0.0",
-  "description": "File Share Service with Cloudflare Pages, R2, and D1",
-  "main": "index.js",
-  "scripts": {
-    "start:frontend": "npm run dev --prefix frontend",
-    "build:frontend": "npm run build --prefix frontend",
-    "deploy": "echo 'Deploy via Cloudflare Pages Git integration. Push to GitHub!'",
-    "d1:migrate": "wrangler d1 execute your-d1-database-name --file=./functions/api/schema.sql"
-  },
-  "keywords": [
-    "cloudflare",
-    "pages",
-    "worker",
-    "r2",
-    "d1",
-    "react",
-    "hono",
-    "fileshare"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
-  "devDependencies": {
-    "hono": "^4.3.5",
-    "uuid": "^9.0.1",
-    "@types/uuid": "^9.0.8",
-    "@cloudflare/workers-types": "^4.20250605.0"
-  }
-}
+    {
+      "name": "your-fileshare-project",
+      "version": "1.0.0",
+      "description": "File Share Service with Cloudflare Pages, R2, and D1",
+      "main": "index.js",
+      "scripts": {
+        "start:frontend": "npm run dev --prefix frontend",
+        "build:frontend": "npm run build --prefix frontend",
+        "deploy": "echo 'Deploy via Cloudflare Pages Git integration. Push to GitHub!'",
+        "d1:migrate": "wrangler d1 execute your-d1-database-name --file=./functions/api/schema.sql"
+      },
+      "keywords": [
+        "cloudflare",
+        "pages",
+        "worker",
+        "r2",
+        "d1",
+        "react",
+        "hono",
+        "fileshare"
+      ],
+      "author": "Your Name",
+      "license": "MIT",
+      "devDependencies": {
+        "hono": "^4.3.5",
+        "uuid": "^9.0.1",
+        "@types/uuid": "^9.0.8",
+        "@cloudflare/workers-types": "^4.20250605.0"
+      }
+    }
+    
