@@ -34,7 +34,7 @@ app.use('*', cors({
 // Middleware for logging request details (useful for debugging)
 app.use('*', async (c, next) => {
   console.log(`[Middleware] Processing ${c.req.method} request to: ${c.req.url}`);
-  console.log(`[Middleware] Path: ${c.req.path}`); // This will be the Hono path (e.g., /upload or /download/xyz)
+  console.log(`[Middleware] Path: ${c.req.path}`); // This will be the Hono path (e.g., /upload or /d/xyz)
   await next();
 });
 
@@ -72,15 +72,14 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-// Cloudflare Pages will automatically prefix this with /api/
-app.post('/api/upload', async (c) => { // Hono route is /upload
+app.post('/upload', async (c) => {
   console.log('[/upload POST] Hono route hit!');
   try {
     const formData = await c.req.formData();
     const file = formData.get('file');
     const passcode = formData.get('passcode') as string | null;
     const expiryDays = formData.get('expiryDays') as string | null;
-    const isPrivate = formData.get('isPrivate') === 'true';
+    const isPrivate = formData.get('isPrivate') === 'true'; // Checkbox value as string
 
     if (!file || typeof file === 'string') {
       return c.json({ success: false, error: 'No file uploaded or file is not a Blob/File.' }, 400);
@@ -136,70 +135,50 @@ app.post('/api/upload', async (c) => { // Hono route is /upload
 });
 
 // --- API Endpoint for File Download/Retrieval ---
-// Cloudflare Pages will automatically prefix this with /api/
-app.get('/d/:slug', async (c) => { // Hono route is /f/:slug
+app.get('/d/:slug', async (c) => {
   console.log('[/d/:slug GET] Hono route hit!');
-  console.log('Download slug:', c.req.param('slug'));
-  console.log('Provided passcode (if any):', c.req.query('passcode'));
+  const slug = c.req.param('slug');
+  const providedPasscode = c.req.query('passcode');
 
-  try {
-    const slug = c.req.param('slug');
-    const providedPasscode = c.req.query('passcode');
+  const { results } = await c.env.DB.prepare(
+    'SELECT * FROM files WHERE short_url_slug = ?'
+  ).bind(slug).all();
 
-    const { results } = await c.env.DB.prepare(
-      'SELECT * FROM files WHERE short_url_slug = ?'
-    ).bind(slug).all();
-
-    console.log('D1 query results:', results);
-
-    if (!results || results.length === 0) {
-      console.log('File metadata not found for slug:', slug);
-      return c.json({ success: false, error: 'File not found.' }, 404);
-    }
-
-    const fileMetadata = results[0] as any;
-    console.log('File metadata from D1:', fileMetadata);
-
-    if (fileMetadata.expiry_timestamp && Date.now() > fileMetadata.expiry_timestamp) {
-      console.log('File expired:', slug);
-      return c.json({ success: false, error: 'This file has expired and is no longer available.' }, 410);
-    }
-
-    if (fileMetadata.is_private === 1) {
-      if (!providedPasscode) {
-        console.log('Private file, no passcode provided.');
-        return c.json({ success: false, error: 'This file is private and requires a passcode. Please provide it as a query parameter (e.g., ?passcode=YOUR_PASSCODE).' }, 401);
-      }
-      const providedPasscodeHash = await hashPasscode(providedPasscode);
-      if (providedPasscodeHash !== fileMetadata.passcode_hash) {
-        console.log('Private file, invalid passcode.');
-        return c.json({ success: false, error: 'Invalid passcode provided.' }, 403);
-      }
-    }
-
-    const r2ObjectKey = `files/${fileMetadata.id}-${fileMetadata.original_filename}`;
-    console.log('Attempting to retrieve from R2 with key:', r2ObjectKey);
-    const object = await c.env.FILES_BUCKET.get(r2ObjectKey);
-
-    if (!object) {
-      console.log('File content not found in R2 for key:', r2ObjectKey);
-      return c.json({ success: false, error: 'File content not found in storage.' }, 404);
-    }
-    console.log('File object retrieved from R2.');
-
-    c.header('Content-Type', fileMetadata.mime_type || 'application/octet-stream');
-    c.header('Content-Disposition', `attachment; filename="${fileMetadata.original_filename}"`);
-    c.header('Content-Length', fileMetadata.file_size.toString());
-
-    return c.body(object.body);
-  } catch (error) {
-    console.error('Download route handler error:', error);
-    return c.json({ success: false, error: 'An unexpected error occurred during download.' }, 500);
+  if (!results || results.length === 0) {
+    return c.json({ success: false, error: 'File not found.' }, 404);
   }
+
+  const fileMetadata = results[0] as any;
+
+  if (fileMetadata.expiry_timestamp && Date.now() > fileMetadata.expiry_timestamp) {
+    return c.json({ success: false, error: 'This file has expired and is no longer available.' }, 410);
+  }
+
+  if (fileMetadata.is_private === 1) {
+    if (!providedPasscode) {
+      return c.json({ success: false, error: 'This file is private and requires a passcode. Please provide it as a query parameter (e.g., ?passcode=YOUR_PASSCODE).' }, 401);
+    }
+    const providedPasscodeHash = await hashPasscode(providedPasscode);
+    if (providedPasscodeHash !== fileMetadata.passcode_hash) {
+      return c.json({ success: false, error: 'Invalid passcode provided.' }, 403);
+    }
+  }
+
+  const r2ObjectKey = `files/${fileMetadata.id}-${fileMetadata.original_filename}`;
+  const object = await c.env.FILES_BUCKET.get(r2ObjectKey);
+
+  if (!object) {
+    return c.json({ success: false, error: 'File content not found in storage.' }, 404);
+  }
+
+  c.header('Content-Type', fileMetadata.mime_type || 'application/octet-stream');
+  c.header('Content-Disposition', `attachment; filename="${fileMetadata.original_filename}"`);
+  c.header('Content-Length', fileMetadata.file_size.toString());
+
+  return c.body(object.body);
 });
 
-// Fallback route for any other requests that don't match the above in Hono
-// This will return Hono's default 404 for any /api/xyz not explicitly defined.
+// Fallback for any /api/xyz not explicitly defined.
 app.all('*', (c) => {
     console.log('[*] Hono Fallback route hit!');
     console.log('Fallback Request URL:', c.req.url);
@@ -208,12 +187,4 @@ app.all('*', (c) => {
     return c.notFound(); // Returns Hono's default 404 Not Found JSON
 });
 
-// Pages Function entry point: Cloudflare Pages automatically calls app.fetch
-export const onRequest = async (context: PagesFunctionContext<Env>) => {
-  console.log('[onRequest] Pages Function triggered.');
-  console.log('Full Request URL from context:', context.request.url);
-  console.log('Request method from context:', context.request.method);
-  console.log('Request Path (from context.request.url):', new URL(context.request.url).pathname);
-
-  return app.fetch(context.request, context.env);
-};
+export default app;
