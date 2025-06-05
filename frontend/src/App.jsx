@@ -9,6 +9,8 @@ function App() {
   const [expiryDays, setExpiryDays] = useState('');
   const [uploadResult, setUploadResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0); // New state for upload progress
+  const [isUploading, setIsUploading] = useState(false); // New state to indicate upload in progress
 
   // State for download section
   const [downloadSlug, setDownloadSlug] = useState('');
@@ -67,14 +69,19 @@ function App() {
   const handleUpload = async () => {
     setUploadResult(null);
     setErrorMessage('');
+    setUploadProgress(0); // Reset progress
+    setIsUploading(true); // Indicate upload started
+
     if (!selectedFile) {
       setErrorMessage('Please select a file to upload.');
+      setIsUploading(false);
       return;
     }
 
     // Passcode validation on upload
     if (isPrivate && !passcode) {
       setErrorMessage('Passcode is required for private files.');
+      setIsUploading(false);
       return;
     }
 
@@ -89,27 +96,58 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_PATH}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
+      // Using XMLHttpRequest for better progress tracking
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE_PATH}/upload`, true);
 
-      const data = await response.json();
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentCompleted = Math.round((event.loaded * 100) / event.total);
+          setUploadProgress(percentCompleted);
+        }
+      };
 
-      if (response.ok && data.success) {
-        setUploadResult({
-          shortUrl: `${window.location.origin}/s/${data.shortUrlSlug}`, // Short URL for display
-          originalFilename: data.originalFilename,
-          isPrivate: data.isPrivate,
-          expiryTimestamp: data.expiryTimestamp,
-        });
-        setDownloadSlug(data.shortUrlSlug); // Pre-fill for easy testing
-      } else {
-        setErrorMessage(data.error || 'Upload failed. Please check the console for details.');
-      }
+      xhr.onload = () => {
+        setIsUploading(false);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const data = JSON.parse(xhr.responseText);
+          if (data.success) {
+            setUploadResult({
+              shortUrl: `${window.location.origin}/s/${data.shortUrlSlug}`,
+              originalFilename: data.originalFilename,
+              isPrivate: data.isPrivate,
+              expiryTimestamp: data.expiryTimestamp,
+            });
+            setDownloadSlug(data.shortUrlSlug);
+            setUploadProgress(100); // Ensure it shows 100% on success
+          } else {
+            setErrorMessage(data.error || 'Upload failed. Please check the console for details.');
+            setUploadProgress(0); // Reset on error
+          }
+        } else {
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            setErrorMessage(errorData.error || `Upload failed: HTTP ${xhr.status}`);
+          } catch (e) {
+            setErrorMessage(`Upload failed: HTTP ${xhr.status}`);
+          }
+          setUploadProgress(0); // Reset on error
+        }
+      };
+
+      xhr.onerror = () => {
+        setIsUploading(false);
+        setErrorMessage('An unexpected network error occurred during upload.');
+        setUploadProgress(0); // Reset on error
+      };
+
+      xhr.send(formData);
+
     } catch (error) {
       console.error('Upload error:', error);
       setErrorMessage('An unexpected error occurred during upload.');
+      setUploadProgress(0); // Reset on error
+      setIsUploading(false);
     }
   };
 
@@ -121,19 +159,13 @@ function App() {
       return;
     }
 
-    // For manual download from the UI, directly call the /s/ route
     let downloadUrl = `${window.location.origin}/s/${downloadSlug}`;
     if (downloadPasscode) {
       downloadUrl += `?passcode=${downloadPasscode}`;
     }
 
-    // Direct navigation to trigger download (or redirect from server)
     window.location.href = downloadUrl;
-
-    // We expect the server to handle the download or redirect.
-    // The previous error handling for 401/403 will be handled by the server redirecting back
-    // to the main page with parameters, so this block is adjusted.
-    setDownloadResult('Attempting to download...'); // Provide immediate feedback
+    setDownloadResult('Attempting to download...');
   };
 
   return (
@@ -169,6 +201,7 @@ function App() {
               file:text-sm file:font-semibold
               file:bg-blue-50 file:text-blue-700
               hover:file:bg-blue-100 mb-4"
+            disabled={isUploading} // Disable during upload
           />
           <input
             type="password"
@@ -177,7 +210,7 @@ function App() {
             onChange={(e) => setPasscode(e.target.value)}
             className={`w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 ${isPrivate ? '' : 'opacity-50'}`}
             required={isPrivate} // Make required based on checkbox
-            disabled={!isPrivate} // Disable if not private
+            disabled={!isPrivate || isUploading} // Disable if not private or during upload
           />
           <div className="flex items-center mb-4">
             <input
@@ -186,6 +219,7 @@ function App() {
               checked={isPrivate}
               onChange={handleIsPrivateChange} // Use custom handler
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              disabled={isUploading} // Disable during upload
             />
             <label htmlFor="isPrivate" className="ml-2 text-gray-700">Make file private (requires passcode)</label>
           </div>
@@ -195,13 +229,26 @@ function App() {
             value={expiryDays}
             onChange={(e) => setExpiryDays(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            disabled={isUploading} // Disable during upload
           />
           <button
             onClick={handleUpload}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300 ease-in-out shadow-md"
+            disabled={isUploading} // Disable button during upload
           >
-            Upload File
+            {isUploading ? 'Uploading...' : 'Upload File'}
           </button>
+
+          {/* Upload Progress Bar */}
+          {isUploading && (
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+              <div
+                className="bg-blue-600 h-2.5 rounded-full"
+                style={{ width: `${uploadProgress}%` }}
+              ></div>
+              <p className="text-sm text-gray-600 mt-1">{uploadProgress}%</p>
+            </div>
+          )}
 
           {uploadResult && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-md">
