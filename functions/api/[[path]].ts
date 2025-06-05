@@ -1,5 +1,5 @@
-// functions/[[path]].ts (Cloudflare Pages Function Backend)
-// This file should be directly inside the 'functions' directory, NOT 'functions/api'
+// functions/api/[[path]].ts (Cloudflare Pages Function Backend)
+// This file should be directly inside the 'functions/api' directory.
 import { Hono } from 'hono';
 import { v4 as uuidv4 } from 'uuid';
 import { cors } from 'hono/cors';
@@ -22,10 +22,9 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Apply CORS middleware to all routes handled by this function.
-// Since [[path]].ts is at the root of 'functions', it catches all non-static requests.
+// Apply CORS middleware to all routes handled by this function (prefixed by /api automatically).
 app.use('*', cors({
-  origin: '*', // IMPORTANT: Adjust to your frontend's actual domain(s) in production (e.g., 'https://fileshare-project.pages.dev')
+  origin: '*', // IMPORTANT: Adjust this to your Pages domain in production (e.g., 'https://fileshare-project.pages.dev')
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['POST', 'GET', 'OPTIONS'],
   maxAge: 600,
@@ -35,13 +34,9 @@ app.use('*', cors({
 // Middleware for logging request details (useful for debugging)
 app.use('*', async (c, next) => {
   console.log(`[Middleware] Processing ${c.req.method} request to: ${c.req.url}`);
-  console.log(`[Middleware] Path: ${c.req.path}`); // This will be the full path Hono sees (e.g., /api/upload or /f/xyz or /)
+  console.log(`[Middleware] Path: ${c.req.path}`); // This will be the Hono path (e.g., /upload or /download/xyz)
   await next();
 });
-
-// --- REMOVED: Root Route for Backend Fallback ---
-// This route was removed to ensure _routes.json correctly handles static asset serving for '/'
-// If the static frontend is not loading after this change, the issue is definitively with _routes.json.
 
 // Helper function to hash a string using SHA-256 (for passcodes)
 async function hashPasscode(passcode: string): Promise<string> {
@@ -77,8 +72,9 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-app.post('/api/upload', async (c) => {
-  console.log('[/api/upload POST] Route hit!');
+// Cloudflare Pages will automatically prefix this with /api/
+app.post('/upload', async (c) => { // Hono route is /upload
+  console.log('[/upload POST] Hono route hit!');
   try {
     const formData = await c.req.formData();
     const file = formData.get('file');
@@ -140,8 +136,9 @@ app.post('/api/upload', async (c) => {
 });
 
 // --- API Endpoint for File Download/Retrieval ---
-app.get('/f/:slug', async (c) => {
-  console.log('[/f/:slug GET] Route hit!');
+// Cloudflare Pages will automatically prefix this with /api/
+app.get('/download/:slug', async (c) => { // Hono route is /download/:slug
+  console.log('[/download/:slug GET] Hono route hit!');
   console.log('Download slug:', c.req.param('slug'));
   console.log('Provided passcode (if any):', c.req.query('passcode'));
 
@@ -201,17 +198,17 @@ app.get('/f/:slug', async (c) => {
   }
 });
 
-// Fallback route for any other requests that don't match the above
-// This route will now catch anything that wasn't /api/* or /f/* if _routes.json fails.
+// Fallback route for any other requests that don't match the above in Hono
+// This will return Hono's default 404 for any /api/xyz not explicitly defined.
 app.all('*', (c) => {
-    console.log('[*] Fallback route hit!');
+    console.log('[*] Hono Fallback route hit!');
     console.log('Fallback Request URL:', c.req.url);
-    console.log('Fallback Request Path:', c.req.path);
+    console.log('Fallback Request Path (Hono):', c.req.path);
     console.log('Fallback Request Method:', c.req.method);
-    return c.notFound(); // Changed to Hono's c.notFound()
+    return c.notFound(); // Returns Hono's default 404 Not Found JSON
 });
 
-// Pages Function entry point
+// Pages Function entry point: Cloudflare Pages automatically calls app.fetch
 export const onRequest = async (context: PagesFunctionContext<Env>) => {
   console.log('[onRequest] Pages Function triggered.');
   console.log('Full Request URL from context:', context.request.url);
