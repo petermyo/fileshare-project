@@ -2,7 +2,7 @@
 // This file should be directly inside the 'functions' directory, NOT 'functions/api'
 import { Hono } from 'hono';
 import { v4 as uuidv4 } from 'uuid';
-import { cors } from 'hono/cors'; // Keep import for potential re-introduction later
+import { cors } from 'hono/cors';
 
 // Define the environment variables (bindings)
 interface Env {
@@ -22,14 +22,29 @@ interface PagesFunctionContext<Env> {
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Removed global app.use('*', ...) middlewares for debugging.
-// We will re-add them if core routing works.
+// Re-add CORS middleware
+// Apply CORS middleware to all routes handled by this function.
+app.use('*', cors({
+  origin: '*', // IMPORTANT: Adjust to your frontend's actual domain(s) in production (e.g., 'https://fileshare-project.pages.dev')
+  allowHeaders: ['Content-Type', 'Authorization'],
+  allowMethods: ['POST', 'GET', 'OPTIONS'],
+  maxAge: 600,
+  credentials: true,
+}));
 
-// --- TEST ROUTE ---
-// Add a simple test route to verify Hono can match ANY route.
-app.get('/test', (c) => {
-  console.log('[/test GET] Route hit!');
-  return c.text('Test route successful!');
+// Re-add middleware for logging request details
+app.use('*', async (c, next) => {
+  console.log(`[Middleware] Processing ${c.req.method} request to: ${c.req.url}`);
+  console.log(`[Middleware] Path: ${c.req.path}`); // This will be the full path Hono sees (e.g., /api/upload or /f/xyz or /)
+  await next();
+});
+
+// --- NEW: Root Route for Backend Fallback ---
+// This route will only be hit if _routes.json fails to serve the static frontend
+// and the request falls through to the function. It's a clearer fallback than the generic 404.
+app.get('/', (c) => {
+  console.log('[/ GET] Backend root route hit (should ideally be served by static frontend)!');
+  return c.text('Welcome to the File Share API! If you see this, the static frontend might not be loading.');
 });
 
 // Helper function to hash a string using SHA-256 (for passcodes)
@@ -66,7 +81,6 @@ const generateShortUrlSlug = async (env: Env): Promise<string> => {
 };
 
 // --- API Endpoint for File Upload ---
-// Explicitly define the '/api/upload' route
 app.post('/api/upload', async (c) => {
   console.log('[/api/upload POST] Route hit!');
   try {
@@ -109,7 +123,7 @@ app.post('/api/upload', async (c) => {
       file.name,
       file.type,
       file.size,
-      Date.now(),
+      Date.Date.now(), // Fixed: Use Date.now()
       expiryTimestamp,
       passcodeHash,
       isPrivate ? 1 : 0
@@ -130,7 +144,6 @@ app.post('/api/upload', async (c) => {
 });
 
 // --- API Endpoint for File Download/Retrieval ---
-// Explicitly define the '/f/:slug' route
 app.get('/f/:slug', async (c) => {
   console.log('[/f/:slug GET] Route hit!');
   console.log('Download slug:', c.req.param('slug'));
