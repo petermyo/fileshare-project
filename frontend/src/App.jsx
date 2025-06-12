@@ -49,12 +49,13 @@ function App() {
 
         // Check for ad screen redirect from Cloudflare Pages Function
         const showAdFromUrl = searchParams.get('showAd') === 'true';
-        const downloadUrlFromAd = searchParams.get('downloadUrl');
+        const downloadUrlFromAd = searchParams.get('downloadUrl'); // This is the original file.myozarniaung.com URL
 
         if (showAdFromUrl && downloadUrlFromAd) {
             // If ad screen is requested from URL, set state to show it
             setShowAdScreen(true);
             setAdScreenDownloadUrl(downloadUrlFromAd);
+            setAdScreenCountdown(5); // Reset countdown every time
             // Clean URL params to prevent re-showing ad screen on refresh
             const cleanUrl = new URL(window.location.href);
             cleanUrl.searchParams.delete('showAd');
@@ -82,9 +83,12 @@ function App() {
                 setAdScreenCountdown(prevCount => prevCount - 1);
             }, 1000);
         } else if (showAdScreen && adScreenCountdown === 0) {
-            // Countdown finished, redirect to actual download
+            // Countdown finished, redirect to actual download URL with 'ad=seen' flag
             if (adScreenDownloadUrl) {
-                window.location.href = adScreenDownloadUrl;
+                // Append 'ad=seen' to the original download URL
+                const finalDownloadUrl = new URL(adScreenDownloadUrl);
+                finalDownloadUrl.searchParams.set('ad', 'seen');
+                window.location.href = finalDownloadUrl.toString();
             } else {
                 // Fallback if download URL is missing (should not happen if Pages Function works)
                 console.error("Ad screen: Final download URL is missing!");
@@ -165,10 +169,8 @@ function App() {
                         const newUpload = {
                             fileId: data.shortUrlSlug,
                             fileName: data.originalFilename,
-                            // *** IMPORTANT CHANGE HERE ***
-                            // The downloadUrl displayed and stored should now be the one
-                            // that points to your Cloudflare Pages Function
-                            downloadUrl: `${window.location.origin}/download-proxy?url=${encodeURIComponent(`${window.location.origin}/s/${data.shortUrlSlug}`)}`,
+                            // *** IMPORTANT: The downloadUrl should be the actual file.myozarniaung.com URL ***
+                            downloadUrl: `https://file.myozarniaung.com/s/${data.shortUrlSlug}`,
                             uploadedDate: new Date().toLocaleString(),
                             isPrivate: data.isPrivate,
                             expiryTimestamp: data.expiryTimestamp,
@@ -222,20 +224,16 @@ function App() {
             return;
         }
 
-        // *** IMPORTANT CHANGE HERE ***
-        // Instead of directly navigating to the download URL,
-        // navigate to the Cloudflare Pages Function.
-        let originalDownloadUrl = `${window.location.origin}/s/${downloadSlug}`;
+        // *** IMPORTANT: The download link now points directly to the original file.myozarniaung.com URL ***
+        // The s/[[slug]].ts Pages Function will handle the ad redirection.
+        let originalDownloadUrl = `https://file.myozarniaung.com/s/${downloadSlug}`;
         if (downloadPasscode) {
-            // Note: Passcodes for actual file downloads are usually handled by the backend
-            // upon direct download. The AdScreen doesn't need to know the passcode.
-            // If your backend handles passcode via URL parameter, include it here.
-            originalDownloadUrl += `?passcode=${downloadPasscode}`;
+            // If the passcode is entered in the form, append it here
+            // The s/[[slug]].ts function will check this on the second pass
+            originalDownloadUrl += `?passcode=${encodeURIComponent(downloadPasscode)}`;
         }
 
-        // Redirect to the Cloudflare Pages Function which will then redirect to the AdScreen
-        window.location.href = `${window.location.origin}/download-proxy?url=${encodeURIComponent(originalDownloadUrl)}`;
-
+        window.location.href = originalDownloadUrl; // Redirect to the original URL
         setDownloadResult('Redirecting for download...');
     };
 
@@ -376,7 +374,7 @@ function App() {
                         {uploadResult && (
                             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-md">
                                 <p className="font-semibold text-lg mb-2">Upload Successful!</p>
-                                {/* *** IMPORTANT CHANGE HERE: Display URL points to proxy *** */}
+                                {/* Display URL is the actual file.myozarniaung.com URL */}
                                 <p><strong>Short URL:</strong> <a href={uploadResult.downloadUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">{uploadResult.downloadUrl}</a></p>
                                 {uploadResult.isPrivate && <p className="text-orange-700">This file is private. Passcode is required for download.</p>}
                                 {uploadResult.expiryTimestamp && (
@@ -442,9 +440,9 @@ function App() {
                                     {uploadedFiles.map((file, index) => (
                                         <tr key={index} className="hover:bg-gray-50">
                                             <td className="py-3 px-4 text-sm">
-                                                {/* *** IMPORTANT CHANGE HERE: Link points to proxy *** */}
+                                                {/* Link points directly to the original file.myozarniaung.com URL */}
                                                 <a
-                                                    href={`${window.location.origin}/download-proxy?url=${encodeURIComponent(file.downloadUrl.replace(`${window.location.origin}/`, 'https://file.myozarniaung.com/'))}`}
+                                                    href={file.downloadUrl}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="text-blue-600 hover:text-blue-800 underline break-all"
