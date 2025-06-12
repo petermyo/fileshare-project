@@ -1,10 +1,24 @@
 // functions/api/get-presigned-upload-url.ts
-// This Pages Function provides a presigned URL for direct file upload to R2.
+// This Pages Function provides a presigned URL for direct file upload to R2
+// using the AWS SDK S3 Request Presigner as a workaround for getPresignedUrl issues.
 
 import { Hono } from 'hono';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+// Ensure these environment variables are set in your Cloudflare Pages project settings
+// R2_ACCESS_KEY_ID
+// R2_SECRET_ACCESS_KEY
+// R2_ACCOUNT_ID (Your Cloudflare Account ID)
+// R2_BUCKET_NAME (e.g., 'filesharing')
 
 interface Env {
-  FILES_BUCKET: R2Bucket; // Ensure this R2 binding is configured in your Pages project
+  // We still list FILES_BUCKET for type safety, but we'll use AWS SDK for presigning
+  FILES_BUCKET: R2Bucket; 
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
+  R2_ACCOUNT_ID: string; // Your Cloudflare Account ID (from dashboard URL or Workers & Pages overview)
+  R2_BUCKET_NAME: string; // The name of your R2 bucket (e.g., 'filesharing')
 }
 
 interface RequestBody {
@@ -29,28 +43,39 @@ app.post('/api/get-presigned-upload-url', async (c) => {
     const fileId = crypto.randomUUID();
     const r2ObjectKey = `files/${fileId}-${fileName}`; // Standard R2 key format
 
-    console.log(`[get-presigned-upload-url] Generating presigned PUT URL for key: ${r2ObjectKey}`);
+    console.log(`[get-presigned-upload-url] Generating presigned PUT URL for key: ${r2ObjectKey} using AWS SDK.`);
 
     let uploadUrl;
     try {
-        // --- FIX APPLIED HERE ---
-        // Use getPresignedUrl for generating an upload URL for the client.
-        // The 'put' method is for directly putting a file from the worker itself.
-        uploadUrl = await c.env.FILES_BUCKET.getPresignedUrl(
-            r2ObjectKey,
-            {
-                method: 'PUT', // Crucially specify it's a PUT method for upload
-                // Optional: set expiration for the URL (e.g., 1 hour = 3600 seconds)
-                expiration: 3600,
-                // These headers guide the client on what to send, useful for R2
-                headers: {
-                    'Content-Type': fileType,
-                    // 'Content-Length': fileSize.toString(), // Content-Length can sometimes cause issues if client doesn't send exact match
-                },
+        // Configure S3Client to point to Cloudflare R2's S3-compatible endpoint
+        const s3Client = new S3Client({
+            region: 'auto', // Cloudflare R2 does not use traditional AWS regions
+            endpoint: `https://${c.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, // Your R2 custom endpoint
+            credentials: {
+                accessKeyId: c.env.R2_ACCESS_KEY_ID,
+                secretAccessKey: c.env.R2_SECRET_ACCESS_KEY,
+            },
+            // Recommended for Cloudflare R2 (path style access)
+            forcePathStyle: true, 
+        });
+
+        const command = new PutObjectCommand({
+            Bucket: c.env.R2_BUCKET_NAME, // Your bucket name
+            Key: r2ObjectKey, // The object key in R2
+            ContentType: fileType, // The content type of the file
+            // You can add other S3 PutObject parameters here if needed
+            // e.g., ContentLength: fileSize,
+            Metadata: {
+              originalfilename: encodeURIComponent(fileName), // Custom metadata for R2
             }
-        );
+        });
+
+        // Generate the presigned URL
+        // expiresIn is in seconds (e.g., 3600 for 1 hour)
+        uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        
     } catch (presignError) {
-        console.error('[get-presigned-upload-url] R2 getPresignedUrl failed:', presignError);
+        console.error('[get-presigned-upload-url] R2 presign (AWS SDK) failed:', presignError);
         // Provide more detail in the error message for debugging
         return c.json({ success: false, error: `R2 presign error: ${presignError.message || presignError}` }, 500);
     }
