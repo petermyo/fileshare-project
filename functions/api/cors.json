@@ -1,0 +1,10 @@
+// cors.json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedOrigins": ["https://adsscreensupport.fileshare-project.pages.dev", "https://file.myozarniaung.com","https://multipartfilesupport.fileshare-project.pages.dev"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
