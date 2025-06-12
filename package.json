@@ -1,31 +1,43 @@
 {
   "name": "fileshare-project",
   "version": "1.0.0",
-  "description": "File Share Service with Cloudflare Pages, R2, and D1",
+  "description": "A file sharing application using Cloudflare Pages, R2, and D1.",
   "main": "index.js",
   "scripts": {
-    "start:frontend": "npm run dev --prefix frontend",
-    "build:frontend": "npm run build --prefix frontend",
-    "deploy": "echo 'Deploy via Cloudflare Pages Git integration. Push to GitHub!'",
-    "d1:migrate": "wrangler d1 execute your-d1-database-name --file=./functions/schema.sql",
-    "set-r2-cors": "wrangler r2 bucket put-cors filesharing --file cors.json"
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "set-r2-cors": "npx wrangler r2 bucket put-cors filesharing --file cors.json"
+    // The change is here: "npx wrangler" instead of just "wrangler"
   },
-  "keywords": [
-    "cloudflare",
-    "pages",
-    "worker",
-    "r2",
-    "d1",
-    "react",
-    "hono",
-    "fileshare"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "hono": "^4.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1"
+  },
   "devDependencies": {
-    "hono": "^4.3.5",
-    "uuid": "^9.0.1",
-    "@types/uuid": "^9.0.8",
-    "@cloudflare/workers-types": "^4.20250605.0"
+    "wrangler": "^3.0.0" 
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
