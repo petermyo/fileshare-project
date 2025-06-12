@@ -9,7 +9,6 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "set-r2-cors": "npx wrangler r2 bucket put-cors filesharing --file cors.json"
-    // The change is here: "npx wrangler" instead of just "wrangler"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
