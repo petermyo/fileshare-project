@@ -258,13 +258,30 @@ function App() {
                     </p>
 
                     {/* Ad Container (350x350) */}
-                    <div className="w-[350px] h-[350px] bg-white border border-gray-300 rounded-lg shadow-xl flex items-center justify-center overflow-hidden mb-8">
-                        {/* Replace with your actual ad image or ad network code */}
-                        <img
-                            src="https://via.placeholder.com/350x350?text=Your+Ad+Here"
-                            alt="Advertisement"
-                            className="max-w-full max-h-full object-contain rounded-lg"
-                        />
+                    <div className="relative w-[350px] h-[350px] bg-white border border-gray-300 rounded-lg shadow-xl hover:shadow-2xl transition-shadow duration-300 flex items-center justify-center overflow-hidden mb-8">
+                        {/* Ad Link */}
+                        <a href="https://mpt.com.mm/en/mpt-newyear-1500-promotion-3-en/" target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+                            {/* Ad Image */}
+                            <img
+                                src="https://mpt-aws-wp-bucket.s3.ap-southeast-1.amazonaws.com/wp-content/uploads/2025/05/26091607/LuckyDraw_refresh400-1.jpg"
+                                alt="Advertisement for MPT New Year Promotion"
+                                className="w-full h-full object-cover rounded-lg" // object-cover to fill the space
+                                onError={(e) => {
+                                    e.currentTarget.onerror = null; // Prevent infinite loop
+                                    e.currentTarget.src = "https://placehold.co/350x350/E0E0E0/333333?text=Ad+Loading+Failed"; // Fallback placeholder
+                                }}
+                            />
+                        </a>
+
+                        {/* Timer Overlay */}
+                        <div className="absolute top-2 right-2 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm shadow-md">
+                            {adScreenCountdown}
+                        </div>
+
+                        {/* "Ads" Label */}
+                        <div className="absolute top-2 left-2 bg-gray-800/70 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-md">
+                            Ads
+                        </div>
                     </div>
                     <p className="text-gray-600 text-sm">
                         Thank you for supporting our service.
