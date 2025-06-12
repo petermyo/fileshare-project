@@ -1,9 +1,0 @@
-[
-  {
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedOrigins": ["https://multipartfilesupport.fileshare-project.pages.dev", "https://file.myozarniaung.com"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
