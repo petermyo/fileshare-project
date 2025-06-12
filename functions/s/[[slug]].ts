@@ -47,7 +47,7 @@ app.get('/s/:slug', async (c) => {
     // This will be the URL that the ad screen redirects back to.
     const currentFullDownloadUrl = c.req.url; // This will now be on file.myozarniaung.com
 
-    // Dynamically get the current origin (file.myozarniaung.com)
+    // Dynamically get the current origin (file.myozarniaung.com or adsscreensupport.fileshare-project.pages.dev)
     const currentOrigin = new URL(c.req.url).origin;
 
     // Construct the URL to redirect to your React App's Ad Screen
