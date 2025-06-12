@@ -1,4 +1,4 @@
-// App.jsx - Updated with Ad Screen and Pages Function Redirection
+// App.jsx - Updated with Direct-to-R2 Upload Logic and Ad Screen
 import React, { useState, useRef, useEffect } from 'react';
 
 const API_BASE_PATH = '/api'; // All backend API calls will start with /api
@@ -27,7 +27,7 @@ function App() {
 
     const passcodeRef = useRef(null); // Ref to focus the passcode input
 
-    // --- NEW STATES FOR AD SCREEN ---
+    // --- NEW STATES FOR AD SCREEN (from previous update) ---
     const [showAdScreen, setShowAdScreen] = useState(false);
     const [adScreenDownloadUrl, setAdScreenDownloadUrl] = useState('');
     const [adScreenCountdown, setAdScreenCountdown] = useState(5); // Initial countdown for ad screen
@@ -122,6 +122,7 @@ function App() {
         }
     };
 
+    // --- REFACTORED handleUpload for Direct-to-R2 Upload ---
     const handleUpload = async () => {
         setUploadResult(null);
         setErrorMessage('');
@@ -140,19 +141,35 @@ function App() {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        if (isPrivate && passcode) {
-            formData.append('passcode', passcode);
-        }
-        formData.append('isPrivate', isPrivate.toString());
-        if (expiryDays) {
-            formData.append('expiryDays', expiryDays);
-        }
-
         try {
+            // 1. Request a presigned URL from your Pages Function
+            const presignedUrlResponse = await fetch(`${API_BASE_PATH}/get-presigned-upload-url`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    fileName: selectedFile.name,
+                    fileType: selectedFile.type,
+                    fileSize: selectedFile.size,
+                }),
+            });
+
+            if (!presignedUrlResponse.ok) {
+                const errorData = await presignedUrlResponse.json();
+                throw new Error(errorData.error || 'Failed to get presigned URL.');
+            }
+
+            const { uploadUrl, r2ObjectKey } = await presignedUrlResponse.json();
+            console.log("Received presigned URL:", uploadUrl);
+            console.log("R2 Object Key:", r2ObjectKey);
+
+            // 2. Upload the file directly to R2 using the presigned URL
+            // Use XMLHttpRequest for progress tracking
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', `${API_BASE_PATH}/upload`, true);
+            xhr.open('PUT', uploadUrl, true); // Use PUT method for direct R2 upload
+            xhr.setRequestHeader('Content-Type', selectedFile.type); // Important for R2
+            xhr.setRequestHeader('Content-Length', selectedFile.size); // Important for R2
 
             xhr.upload.onprogress = (event) => {
                 if (event.lengthComputable) {
@@ -161,60 +178,86 @@ function App() {
                 }
             };
 
-            xhr.onload = () => {
-                setIsUploading(false);
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    const data = JSON.parse(xhr.responseText);
-                    if (data.success) {
-                        const newUpload = {
-                            fileId: data.shortUrlSlug,
-                            fileName: data.originalFilename,
-                            // *** IMPORTANT: The downloadUrl should be the actual file.myozarniaung.com URL ***
-                            downloadUrl: `https://file.myozarniaung.com/s/${data.shortUrlSlug}`,
-                            uploadedDate: new Date().toLocaleString(),
-                            isPrivate: data.isPrivate,
-                            expiryTimestamp: data.expiryTimestamp,
-                        };
-                        setUploadResult(newUpload);
-                        setDownloadSlug(data.shortUrlSlug);
-                        setUploadProgress(100);
-
-                        setUploadedFiles(prevFiles => {
-                            const updated = [...prevFiles, newUpload];
-                            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
-                            return updated;
-                        });
-
+            const r2UploadPromise = new Promise((resolve, reject) => {
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(true); // R2 upload successful
                     } else {
-                        setErrorMessage(data.error || 'Upload failed. Please check the console for details.');
-                        setUploadProgress(0);
+                        // R2 API error response might be complex, try to parse
+                        let errorDetail = xhr.responseText || `HTTP status ${xhr.status}`;
+                        try {
+                            const errorJson = JSON.parse(errorDetail);
+                            errorDetail = errorJson.message || errorJson.error || errorDetail;
+                        } catch (e) {
+                            // not JSON
+                        }
+                        reject(new Error(`Failed to upload to R2: ${errorDetail}`));
                     }
-                } else {
-                    try {
-                        const errorData = JSON.parse(xhr.responseText);
-                        setErrorMessage(errorData.error || `Upload failed: HTTP ${xhr.status}`);
-                    } catch (e) {
-                        setErrorMessage(`Upload failed: HTTP ${xhr.status}`);
-                    }
-                    setUploadProgress(0);
-                }
-            };
+                };
+                xhr.onerror = () => reject(new Error('Network error during R2 upload.'));
+                xhr.send(selectedFile); // Send the actual file blob
+            });
 
-            xhr.onerror = () => {
-                setIsUploading(false);
-                setErrorMessage('An unexpected network error occurred during upload.');
-                setUploadProgress(0);
-            };
+            await r2UploadPromise; // Wait for R2 upload to complete
 
-            xhr.send(formData);
+            console.log("File successfully uploaded to R2. Finalizing metadata...");
+
+            // 3. Finalize upload by sending metadata to a Pages Function
+            const finalizeResponse = await fetch(`${API_BASE_PATH}/finalize-upload`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    r2ObjectKey: r2ObjectKey, // The key where the file was stored in R2
+                    originalFilename: selectedFile.name,
+                    mimeType: selectedFile.type,
+                    fileSize: selectedFile.size,
+                    isPrivate: isPrivate,
+                    passcode: passcode, // Send raw passcode for hashing on backend
+                    expiryDays: expiryDays,
+                }),
+            });
+
+            if (!finalizeResponse.ok) {
+                const errorData = await finalizeResponse.json();
+                throw new Error(errorData.error || 'Failed to finalize upload metadata.');
+            }
+
+            const data = await finalizeResponse.json();
+
+            if (data.success) {
+                const newUpload = {
+                    fileId: data.shortUrlSlug,
+                    fileName: data.originalFilename,
+                    // The downloadUrl is now your file.myozarniaung.com URL directly
+                    downloadUrl: `https://file.myozarniaung.com/s/${data.shortUrlSlug}`,
+                    uploadedDate: new Date().toLocaleString(),
+                    isPrivate: data.isPrivate,
+                    expiryTimestamp: data.expiryTimestamp,
+                };
+                setUploadResult(newUpload);
+                setDownloadSlug(data.shortUrlSlug);
+                setUploadProgress(100);
+
+                setUploadedFiles(prevFiles => {
+                    const updated = [...prevFiles, newUpload];
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+                    return updated;
+                });
+            } else {
+                throw new Error(data.error || 'Upload failed during metadata finalization.');
+            }
 
         } catch (error) {
             console.error('Upload error:', error);
-            setErrorMessage('An unexpected error occurred during upload.');
-            setUploadProgress(0);
-            setIsUploading(false);
+            setErrorMessage(error.message || 'An unexpected error occurred during upload.');
+            setUploadProgress(0); // Reset on error
+        } finally {
+            setIsUploading(false); // Ensure upload state is reset
         }
     };
+
 
     const handleDownload = async () => {
         setDownloadResult('');
@@ -224,8 +267,8 @@ function App() {
             return;
         }
 
-        // *** IMPORTANT: The download link now points directly to the original file.myozarniaung.com URL ***
-        // The s/[[slug]].ts Pages Function will handle the ad redirection.
+        // The download link now points directly to the original file.myozarniaung.com URL
+        // The s/[[slug]].ts Pages Function will handle the ad redirection and further logic.
         let originalDownloadUrl = `https://file.myozarniaung.com/s/${downloadSlug}`;
         if (downloadPasscode) {
             // If the passcode is entered in the form, append it here
@@ -264,7 +307,7 @@ function App() {
                             Ads
                         </div>
                         {/* Timer Display */}
-                        <div className="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold text-sm shadow-md">
+                        <div className="bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm shadow-md">
                             {adScreenCountdown}
                         </div>
                     </div>
