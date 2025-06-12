@@ -39,6 +39,25 @@ app.post('/api/get-presigned-upload-url', async (c) => {
       return c.json({ success: false, error: 'Missing fileName, fileType, or fileSize' }, 400);
     }
 
+    // --- ENHANCED CHECK AND LOGGING FOR ENVIRONMENT VARIABLES ---
+    const missingEnv = [];
+    if (!c.env.R2_ACCOUNT_ID) missingEnv.push('R2_ACCOUNT_ID');
+    if (!c.env.R2_ACCESS_KEY_ID) missingEnv.push('R2_ACCESS_KEY_ID');
+    if (!c.env.R2_SECRET_ACCESS_KEY) missingEnv.push('R2_SECRET_ACCESS_KEY');
+    if (!c.env.R2_BUCKET_NAME) missingEnv.push('R2_BUCKET_NAME');
+
+    if (missingEnv.length > 0) {
+        console.error(`[get-presigned-upload-url] ERROR: Missing environment variables: ${missingEnv.join(', ')}`);
+        return c.json({ success: false, error: `Missing R2 configuration environment variables: ${missingEnv.join(', ')}` }, 500);
+    }
+
+    console.log(`[get-presigned-upload-url] R2_ACCOUNT_ID: ${c.env.R2_ACCOUNT_ID ? 'SET' : 'NOT SET'}`);
+    console.log(`[get-presigned-upload-url] R2_ACCESS_KEY_ID: ${c.env.R2_ACCESS_KEY_ID ? 'SET' : 'NOT SET'} (masked)`);
+    console.log(`[get-presigned-upload-url] R2_SECRET_ACCESS_KEY: ${c.env.R2_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET'} (masked)`);
+    console.log(`[get-presigned-upload-url] R2_BUCKET_NAME: "${c.env.R2_BUCKET_NAME}"`); // Log the actual value to check for empty string
+    // --- END ENHANCED CHECK AND LOGGING ---
+
+
     // Generate a unique ID for the R2 object to avoid collisions
     const fileId = crypto.randomUUID();
     const r2ObjectKey = `files/${fileId}-${fileName}`; // Standard R2 key format
@@ -60,7 +79,7 @@ app.post('/api/get-presigned-upload-url', async (c) => {
         });
 
         const command = new PutObjectCommand({
-            Bucket: c.env.R2_BUCKET_NAME, // Your bucket name
+            Bucket: c.env.R2_BUCKET_NAME, // Your bucket name, now explicitly logged
             Key: r2ObjectKey, // The object key in R2
             ContentType: fileType, // The content type of the file
             // You can add other S3 PutObject parameters here if needed
