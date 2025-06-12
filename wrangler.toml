@@ -2,7 +2,8 @@
 name = "fileshare-project" # Name of your Cloudflare Pages project
 pages_build_output_dir = "./frontend/dist" # The output directory of your frontend build
 #functions_directory = "./functions" # The directory containing your Pages Functions
-compatibility_date = "2024-05-01" # <--- CHANGE THIS LINE
+compatibility_date = "2024-05-01" # <--- CHANGE THIS LIN
+compatibility_flags = ["nodejs_compat"] # This explicitly enables Node.js compatibility features, which include many modern API additions
 # Make sure this date is in YYYY-MM-DD format
 
 [[r2_buckets]]
