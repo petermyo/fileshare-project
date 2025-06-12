@@ -264,7 +264,7 @@ function App() {
                             Ads
                         </div>
                         {/* Timer Display */}
-                        <div className="bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm shadow-md">
+                        <div className="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center font-bold text-sm shadow-md">
                             {adScreenCountdown}
                         </div>
                     </div>
