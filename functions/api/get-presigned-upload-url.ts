@@ -4,7 +4,8 @@
 import { Hono } from 'hono';
 
 interface Env {
-  FILES_BUCKET: R2Bucket; // Ensure this R2 binding is configured in your Pages project
+  FILES_BUCKET: R2Bucket;
+  DB: D1Database;
 }
 
 interface RequestBody {
