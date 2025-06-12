@@ -257,8 +257,20 @@ function App() {
                         Please wait {adScreenCountdown} seconds while we prepare your download.
                     </p>
 
-                    {/* Ad Container (350x350) */}
-                    <div className="relative w-[350px] h-[350px] bg-white border border-gray-300 rounded-lg shadow-xl hover:shadow-2xl transition-shadow duration-300 flex items-center justify-center overflow-hidden mb-8">
+                    {/* Container for Ads label and Timer, placed above the image */}
+                    <div className="flex justify-between items-center w-[350px] mb-2">
+                        {/* "Ads" Label */}
+                        <div className="bg-gray-800/70 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-md">
+                            Ads
+                        </div>
+                        {/* Timer Display */}
+                        <div className="bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm shadow-md">
+                            {adScreenCountdown}
+                        </div>
+                    </div>
+
+                    {/* Ad Container (350x350) - Now without direct overlays */}
+                    <div className="w-[350px] h-[350px] bg-white border border-gray-300 rounded-lg shadow-xl hover:shadow-2xl transition-shadow duration-300 flex items-center justify-center overflow-hidden mb-8">
                         {/* Ad Link */}
                         <a href="https://mpt.com.mm/en/mpt-newyear-1500-promotion-3-en/" target="_blank" rel="noopener noreferrer" className="block w-full h-full">
                             {/* Ad Image */}
@@ -272,16 +284,6 @@ function App() {
                                 }}
                             />
                         </a>
-
-                        {/* Timer Overlay */}
-                        <div className="absolute top-2 right-2 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm shadow-md">
-                            {adScreenCountdown}
-                        </div>
-
-                        {/* "Ads" Label */}
-                        <div className="absolute top-2 left-2 bg-gray-800/70 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-md">
-                            Ads
-                        </div>
                     </div>
                     <p className="text-gray-600 text-sm">
                         Thank you for supporting our service.
