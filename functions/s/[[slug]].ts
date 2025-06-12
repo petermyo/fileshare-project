@@ -45,14 +45,14 @@ app.get('/s/:slug', async (c) => {
     console.log('[Download Logic /s/] Ad not seen. Redirecting to ad screen.');
     // Construct the full original download URL for the ad screen to use
     // This will be the URL that the ad screen redirects back to.
-    const currentFullDownloadUrl = c.req.url;
+    const currentFullDownloadUrl = c.req.url; // This will now be on file.myozarniaung.com
 
-    // Your main Cloudflare Pages app domain where AdScreen is rendered
-    const adScreenBaseDomain = "https://adsscreensupport.fileshare-project.pages.dev"; // <<< IMPORTANT: Your Pages App URL
+    // Dynamically get the current origin (file.myozarniaung.com or adsscreensupport.fileshare-project.pages.dev)
+    const currentOrigin = new URL(c.req.url).origin;
 
     // Construct the URL to redirect to your React App's Ad Screen
     // It will pass the original download URL for the AdScreen to return to.
-    const adScreenRedirectUrl = new URL(adScreenBaseDomain);
+    const adScreenRedirectUrl = new URL(currentOrigin); // Redirect to the current domain
     adScreenRedirectUrl.searchParams.set('showAd', 'true');
     adScreenRedirectUrl.searchParams.set('downloadUrl', currentFullDownloadUrl);
 
