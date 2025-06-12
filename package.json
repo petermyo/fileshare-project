@@ -8,7 +8,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "set-r2-cors": "npx wrangler r2 bucket cors put filesharing --file cors.json"
+    "set-r2-cors": "npx wrangler r2 bucket cors set filesharing --file cors.json"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
