@@ -5,7 +5,6 @@
 import { Hono } from 'hono';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-
 // Ensure these environment variables are set in your Cloudflare Pages project settings
 // R2_ACCESS_KEY_ID
 // R2_SECRET_ACCESS_KEY
