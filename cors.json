@@ -1,0 +1,14 @@
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT", "GET", "HEAD", "POST", "DELETE"],
+    "AllowedOrigins": [
+      "https://file.myozarniaung.com",
+      "https://multipartfilesupport.fileshare-project.pages.dev"
+      // IMPORTANT: If you are developing locally, add your local development server origin, e.g.:
+      // "http://localhost:3000"
+    ],
+    "ExposeHeaders": ["ETag", "Content-Type", "Content-Length"],
+    "MaxAgeSeconds": 3000
+  }
+]
