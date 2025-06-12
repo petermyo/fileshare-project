@@ -31,28 +31,33 @@ app.post('/api/get-presigned-upload-url', async (c) => {
 
     console.log(`[get-presigned-upload-url] Generating presigned URL for key: ${r2ObjectKey}`);
 
-    // Generate a presigned PUT URL. The expiresIn property determines how long the URL is valid.
-    // Ensure the Content-Type header is explicitly set if you want the browser to send it during PUT
-    const uploadUrl = await c.env.FILES_BUCKET.put(r2ObjectKey, null, {
-        httpMetadata: {
-            contentType: fileType,
-        },
-        // expiration in seconds (e.g., 3600 seconds = 1 hour)
-        // Adjust this based on your needs.
-        // It's good practice to make it long enough for the upload to complete, but not excessively long.
-        customMetadata: {
-            originalFileName: encodeURIComponent(fileName), // Store original name safely
-        }
-    }).upload.url;
-
-    // The upload.url from .put() is already presigned.
+    let uploadUrl;
+    try {
+        // Generate a presigned PUT URL. The expiresIn property determines how long the URL is valid.
+        // Ensure the Content-Type header is explicitly set if you want the browser to send it during PUT
+        // Note: put(key, body, options) -> body can be null for presigned URLs
+        uploadUrl = await c.env.FILES_BUCKET.put(r2ObjectKey, null, {
+            httpMetadata: {
+                contentType: fileType,
+            },
+            // expiration in seconds (e.g., 3600 seconds = 1 hour)
+            // It's good practice to make it long enough for the upload to complete, but not excessively long.
+            customMetadata: {
+                originalFileName: encodeURIComponent(fileName), // Store original name safely
+            }
+        }).upload.url;
+    } catch (putError) {
+        console.error('[get-presigned-upload-url] R2 put operation failed:', putError);
+        // This catch block helps debug issues with the R2 put call itself
+        return c.json({ success: false, error: `R2 operation error: ${putError.message || putError}` }, 500);
+    }
 
     console.log('[get-presigned-upload-url] Presigned URL generated successfully.');
     return c.json({ success: true, uploadUrl, r2ObjectKey }, 200);
 
   } catch (error) {
-    console.error('[get-presigned-upload-url] Error generating presigned URL:', error);
-    return c.json({ success: false, error: 'Failed to generate presigned URL.' }, 500);
+    console.error('[get-presigned-upload-url] Uncaught error in handler:', error);
+    return c.json({ success: false, error: 'Failed to generate presigned URL due to an internal error.' }, 500);
   }
 });
 
