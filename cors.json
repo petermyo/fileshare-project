@@ -1,9 +1,14 @@
-[
-  {
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedOrigins": ["https://multipartfilesupport.fileshare-project.pages.dev", "https://file.myozarniaung.com"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
+{
+  "rules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["PUT", "GET", "HEAD", "POST", "DELETE"],
+      "AllowedOrigins": [
+        "https://file.myozarniaung.com",
+        "https://multipartfilesupport.fileshare-project.pages.dev"
+      ],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}
