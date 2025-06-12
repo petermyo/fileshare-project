@@ -1,4 +1,3 @@
--- functions/api/schema.sql
 DROP TABLE IF EXISTS files;
 CREATE TABLE files (
     id TEXT PRIMARY KEY,
