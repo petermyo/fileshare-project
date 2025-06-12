@@ -4,8 +4,7 @@
 import { Hono } from 'hono';
 
 interface Env {
-  FILES_BUCKET: R2Bucket;
-  DB: D1Database;
+  FILES_BUCKET: R2Bucket; // Ensure this R2 binding is configured in your Pages project
 }
 
 interface RequestBody {
@@ -30,27 +29,30 @@ app.post('/api/get-presigned-upload-url', async (c) => {
     const fileId = crypto.randomUUID();
     const r2ObjectKey = `files/${fileId}-${fileName}`; // Standard R2 key format
 
-    console.log(`[get-presigned-upload-url] Generating presigned URL for key: ${r2ObjectKey}`);
+    console.log(`[get-presigned-upload-url] Generating presigned PUT URL for key: ${r2ObjectKey}`);
 
     let uploadUrl;
     try {
-        // Generate a presigned PUT URL. The expiresIn property determines how long the URL is valid.
-        // Ensure the Content-Type header is explicitly set if you want the browser to send it during PUT
-        // Note: put(key, body, options) -> body can be null for presigned URLs
-        uploadUrl = await c.env.FILES_BUCKET.put(r2ObjectKey, null, {
-            httpMetadata: {
-                contentType: fileType,
-            },
-            // expiration in seconds (e.g., 3600 seconds = 1 hour)
-            // It's good practice to make it long enough for the upload to complete, but not excessively long.
-            customMetadata: {
-                originalFileName: encodeURIComponent(fileName), // Store original name safely
+        // --- FIX APPLIED HERE ---
+        // Use getPresignedUrl for generating an upload URL for the client.
+        // The 'put' method is for directly putting a file from the worker itself.
+        uploadUrl = await c.env.FILES_BUCKET.getPresignedUrl(
+            r2ObjectKey,
+            {
+                method: 'PUT', // Crucially specify it's a PUT method for upload
+                // Optional: set expiration for the URL (e.g., 1 hour = 3600 seconds)
+                expiration: 3600,
+                // These headers guide the client on what to send, useful for R2
+                headers: {
+                    'Content-Type': fileType,
+                    // 'Content-Length': fileSize.toString(), // Content-Length can sometimes cause issues if client doesn't send exact match
+                },
             }
-        }).upload.url;
-    } catch (putError) {
-        console.error('[get-presigned-upload-url] R2 put operation failed:', putError);
-        // This catch block helps debug issues with the R2 put call itself
-        return c.json({ success: false, error: `R2 operation error: ${putError.message || putError}` }, 500);
+        );
+    } catch (presignError) {
+        console.error('[get-presigned-upload-url] R2 getPresignedUrl failed:', presignError);
+        // Provide more detail in the error message for debugging
+        return c.json({ success: false, error: `R2 presign error: ${presignError.message || presignError}` }, 500);
     }
 
     console.log('[get-presigned-upload-url] Presigned URL generated successfully.');
